@@ -1,22 +1,28 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { CamasModule } from './camas/camas.module.js';
+import { InventarioModule } from './inventario/inventario.module.js';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'backend',
+    TypeOrmModule.forRoot({
+      type: 'mssql',
+      host: 'localhost',
+      port: 1433,
+      username: 'sa', // Usuario nativo habilitado
+      password: '123456', // Contraseña del usuario nativo
+      database: 'GestionHospital',
+      autoLoadEntities: true,
+      synchronize: false, 
+      options: {
+        encrypt: false, 
+        trustServerCertificate: true,
+      },
     }),
+    CamasModule,
+    InventarioModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
