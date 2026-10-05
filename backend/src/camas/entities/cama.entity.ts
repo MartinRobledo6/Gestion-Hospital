@@ -1,10 +1,10 @@
 import { Entity, Column, PrimaryGeneratedColumn, VersionColumn } from 'typeorm';
 
 export enum EstadoCama {
-  LIBRES = 'libres',
-  OCUPADAS = 'ocupadas',
+  LIBRES = 'libre',
+  OCUPADAS = 'ocupada',
   EN_LIMPIEZA = 'en limpieza',
-  BLOQUEADAS = 'bloqueadas',
+  BLOQUEADAS = 'bloqueada',
 }
 
 @Entity('Camas')
