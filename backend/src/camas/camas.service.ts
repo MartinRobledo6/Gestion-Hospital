@@ -16,7 +16,6 @@ export class CamasService {
   ) {}
 
   async asignarCama(camaNumero: string, pacienteId: number) {
-    // Iniciamos una TRANSACCIÓN. transactionalEntityManager maneja todo el bloque.
     return await this.camasRepository.manager.transaction(async (transactionalEntityManager) => {
       
       const camaActual = await transactionalEntityManager.findOne(Cama, { where: { Numero: camaNumero } });
@@ -25,14 +24,12 @@ export class CamasService {
       if (camaActual.Estado !== EstadoCama.LIBRES) throw new BadRequestException(`La cama está ${camaActual.Estado}, no se puede asignar.`);
 
       try {
-        // 1. Marcamos la cama como ocupada usando el manager transaccional
         camaActual.Estado = EstadoCama.OCUPADAS;
         await transactionalEntityManager.save(Cama, camaActual);
 
-        // 2. Registramos el historial
         const nuevaAsignacion = transactionalEntityManager.create(AsignacionCama, {
           CamaId: camaActual.Id,
-          PacienteId: pacienteId // Si este ID no existe, ahora se revertirá el Paso 1 automáticamente
+          PacienteId: pacienteId 
         });
         await transactionalEntityManager.save(AsignacionCama, nuevaAsignacion);
         
@@ -45,7 +42,7 @@ export class CamasService {
         if (error instanceof Error && error.name === 'OptimisticLockVersionMismatchError') {
           throw new ConflictException('Error: La cama acaba de ser ocupada por otro usuario.');
         }
-        throw error; // Si falla la Foreign Key, NestJS aborta y deshace los cambios en la cama
+        throw error; 
       }
     });
   }
@@ -123,7 +120,7 @@ export class CamasService {
       throw new BadRequestException('La cama no existe')
     }
 
-    if(camaActual.Estado !== EstadoCama.BLOQUEADAS){
+    if(camaActual.Estado === EstadoCama.BLOQUEADAS){
       throw new BadRequestException(`La cama esta ${camaActual.Estado}, no se puede bloquear`)
     }
 

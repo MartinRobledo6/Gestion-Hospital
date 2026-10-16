@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CamasModule } from './camas/camas.module.js';
 import { InventarioModule } from './inventario/inventario.module.js';
+import {EventEmitterModule} from "@nestjs/event-emitter";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { InventarioModule } from './inventario/inventario.module.js';
         trustServerCertificate: true,
       },
     }),
+    EventEmitterModule.forRoot(),
     CamasModule,
     InventarioModule,
   ],

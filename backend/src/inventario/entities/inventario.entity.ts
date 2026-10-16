@@ -1,19 +1,16 @@
 import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
-@Entity('Inventario')
+@Entity('InventarioInsumos')
 export class Inventario {
   @PrimaryGeneratedColumn()
   Id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ type: 'varchar', length: 150 })
   Nombre: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  Categoria: string;
+  @Column({ type: 'int' })
+  StockActual: number;
 
-  @Column({ type: 'int', default: 0 })
-  CantidadTotal: number;
-
-  @Column({ type: 'int', default: 0 })
-  CantidadDisponible: number;
+  @Column('decimal', { precision: 18, scale: 2 })
+  PrecioUnitario: number;
 }
