@@ -1,85 +1,91 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
+  <nav class="hospital-navbar">
+    <div class="navbar-brand">
+      <span class="logo-icon">🏥</span>
+      <h1>Gestión Hospitalaria</h1>
     </div>
-  </header>
 
-  <RouterView />
+    <div class="navbar-links">
+      <RouterLink to="/camas" class="nav-item">Camas</RouterLink>
+      <RouterLink to="/inventario" class="nav-item">Inventario</RouterLink>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <RouterView />
+  </main>
 </template>
 
-<style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-nav {
+<style>
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
   width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
+  min-height: 100vh;
+  background-color: #f8fafc;
+  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-nav a.router-link-exact-active {
-  color: var(--color-text);
+.hospital-navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 1rem 3rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border-bottom: 3px solid #0284c7;
 }
 
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
+.navbar-brand h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #334155;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
-nav a:first-of-type {
-  border: 0;
+.logo-icon {
+  font-size: 1.8rem;
 }
 
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
+.navbar-links {
+  display: flex;
+  gap: 1rem;
+}
 
-  .logo {
-    margin: 0 2rem 0 0;
-  }
+.nav-item {
+  text-decoration: none;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
 
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
+.nav-item:hover {
+  background-color: #f1f5f9;
+  color: #0284c7;
+}
 
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
+.router-link-active {
+  background-color: #e0f2fe;
+  color: #0284c7;
+}
 
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
+.main-content {
+  padding-top: 1rem;
 }
 </style>
