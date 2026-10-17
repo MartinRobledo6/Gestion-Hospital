@@ -1,43 +1,25 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  VersionColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, VersionColumn } from 'typeorm';
 
 @Entity('Turnos')
 export class TurnoEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ name: 'Id' })
   id: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'PacienteId', type: 'int' })
   pacienteId: number;
 
-  @Column({ type: 'int' })
+  @Column({ name: 'MedicoId', type: 'int' })
   medicoId: number;
 
-  @Column({ type: 'datetime' })
+  @Column({ name: 'FechaHoraInicio', type: 'datetime' })
   fechaHoraInicio: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'FechaHoraFin', type: 'datetime' })
   fechaHoraFin: Date;
 
-  // Estado que gestiona la Máquina de Estados (Patrón State)
-  @Column({ type: 'varchar', length: 50, default: 'Programado' })
+  @Column({ name: 'Estado', type: 'varchar', length: 50, default: 'Programado' })
   estado: string;
 
-  @Column({ type: 'bit', default: false })
-  esEntreturno: boolean;
-
-  // Concurrencia optimista gestionada automáticamente por TypeORM / SQL Server
-  @VersionColumn()
+  @VersionColumn({ name: 'RowVersion' })
   version: number;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

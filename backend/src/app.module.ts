@@ -1,18 +1,18 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AdmisionModule } from './modules/admision/admision.module';
+import { AdmisionModule } from './modules/admision/admision.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'mssql',
       host: 'localhost',
-      port: 1433,
+      port: 64042,
       username: 'sa',
-      password: 'TuPassword123',
+      password: 'joamula15243',
       database: 'HospitalDB',
       autoLoadEntities: true,
-      synchronize: false,
+      synchronize: true,
       options: {
         encrypt: false,
         trustServerCertificate: true,
@@ -21,4 +21,4 @@ import { AdmisionModule } from './modules/admision/admision.module';
     AdmisionModule,
   ],
 })
-export class AppModule {}
+export class AppModule {} 
