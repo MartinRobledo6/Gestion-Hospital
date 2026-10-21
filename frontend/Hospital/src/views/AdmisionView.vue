@@ -9,6 +9,8 @@ interface Turno {
   fechaHoraInicio: string;
   fechaHoraFin: string;
   estado: string;
+  esEntreturno: boolean;
+  duracionReducida: boolean;
 }
 
 interface Bloque {
@@ -19,6 +21,12 @@ interface Bloque {
 interface Aviso {
   tipo: 'ok' | 'error';
   texto: string;
+}
+
+interface Medico {
+  id: number;
+  nombre: string;
+  especialidad: string;
 }
 
 const API_URL = 'http://localhost:3000/admision';
@@ -38,12 +46,23 @@ const hoy = () => {
   return `${f.getFullYear()}-${mes}-${dia}`;
 };
 
-// Selección para reservar: médico -> fecha -> horario
-const medicoId = ref<number | null>(1);
+// Selección para reservar: médico -> fecha -> horario -> datos del paciente
+const medicos = ref<Medico[]>([]);
+const medicoId = ref<number | null>(null);
 const fecha = ref<string>(hoy());
 const horarios = ref<Bloque[]>([]);
 const bloqueElegido = ref<Bloque | null>(null);
-const pacienteIdReserva = ref<number | null>(null);
+const nombre = ref('');
+const email = ref('');
+
+// Formulario de entreturno
+const entreMedicoId = ref<number | null>(null);
+const entreFecha = ref<string>(hoy());
+const entreHora = ref('');
+const entreDuracion = ref<number | null>(null);
+const entreNombre = ref('');
+const entreEmail = ref('');
+const insertandoEntre = ref(false);
 
 // Transiciones de estado permitidas
 const transiciones: Record<string, string[]> = {
@@ -72,6 +91,18 @@ const formatearDia = (clave: string) =>
 
 const claseEstado = (estado: string) =>
   estado.toLowerCase().replace(/ /g, '-');
+
+// Nombre del médico a partir de su id
+const nombreMedico = (id: number | null) =>
+  medicos.value.find((m) => m.id === id)?.nombre ?? `Médico ${id ?? ''}`;
+
+// Minutos que dura un turno (muestra el tiempo reducido por un entreturno)
+const minutosTurno = (t: Turno) =>
+  Math.round(
+    (new Date(t.fechaHoraFin).getTime() -
+      new Date(t.fechaHoraInicio).getTime()) /
+      60000,
+  );
 
 // ---------- Datos derivados ----------
 const turnosOrdenados = computed(() =>
@@ -114,6 +145,24 @@ const obtenerTurnos = async () => {
   }
 };
 
+const obtenerMedicos = async () => {
+  try {
+    const res = await fetch(`${API_URL}/medicos`);
+    if (!res.ok) throw new Error('No se pudo obtener la lista de médicos.');
+    medicos.value = await res.json();
+
+    // Mantener la elección actual; solo pasar al primero si no hay una válida
+    if (!medicos.value.some((m) => m.id === medicoId.value)) {
+      medicoId.value = medicos.value[0]?.id ?? null; // el watch pide sus horarios
+    }
+    if (!medicos.value.some((m) => m.id === entreMedicoId.value)) {
+      entreMedicoId.value = medicos.value[0]?.id ?? null;
+    }
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  }
+};
+
 const obtenerHorarios = async () => {
   bloqueElegido.value = null;
 
@@ -144,21 +193,20 @@ const obtenerHorarios = async () => {
 };
 
 const reservarTurno = async () => {
-  if (!bloqueElegido.value || !medicoId.value || !pacienteIdReserva.value) {
-    return;
-  }
+  if (!bloqueElegido.value || !medicoId.value) return;
 
   const detalle = `${formatearDia(fecha.value)}, ${formatearHora(bloqueElegido.value.inicio)}`;
 
   reservando.value = true;
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/turnos/reservar`, {
+    const res = await fetch(`${API_URL}/turnos/solicitar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        nombre: nombre.value,
+        email: email.value,
         medicoId: medicoId.value,
-        pacienteId: pacienteIdReserva.value,
         fechaHoraInicio: bloqueElegido.value.inicio,
         fechaHoraFin: bloqueElegido.value.fin,
       }),
@@ -167,12 +215,54 @@ const reservarTurno = async () => {
     if (!res.ok) throw new Error(await leerError(res, 'No se pudo reservar.'));
 
     mostrarAviso('ok', `Turno reservado para el ${detalle}.`);
-    pacienteIdReserva.value = null;
+    nombre.value = '';
+    email.value = '';
   } catch (err: any) {
     mostrarAviso('error', err.message);
   } finally {
     reservando.value = false;
     // Refrescar ambos: el horario reservado (u ocupado por otra persona) desaparece
+    await Promise.all([obtenerTurnos(), obtenerHorarios()]);
+  }
+};
+
+const insertarEntreturno = async () => {
+  if (!entreMedicoId.value || !entreHora.value) return;
+
+  insertandoEntre.value = true;
+  aviso.value = null;
+  try {
+    const body: Record<string, unknown> = {
+      nombre: entreNombre.value,
+      email: entreEmail.value,
+      medicoId: entreMedicoId.value,
+      fechaHoraInicio: new Date(
+        `${entreFecha.value}T${entreHora.value}:00`,
+      ).toISOString(),
+    };
+    if (entreDuracion.value) body.duracionMinutos = entreDuracion.value;
+
+    const res = await fetch(`${API_URL}/turnos/entreturno`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        await leerError(res, 'No se pudo insertar el entreturno.'),
+      );
+    }
+
+    mostrarAviso('ok', `Entreturno insertado a las ${entreHora.value}.`);
+    entreNombre.value = '';
+    entreEmail.value = '';
+    entreHora.value = '';
+    entreDuracion.value = null;
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  } finally {
+    insertandoEntre.value = false;
     await Promise.all([obtenerTurnos(), obtenerHorarios()]);
   }
 };
@@ -200,9 +290,10 @@ const cambiarEstado = async (turnoId: number, nuevoEstado: string) => {
 // Al cambiar médico o fecha, pedir de nuevo los horarios libres
 watch([medicoId, fecha], obtenerHorarios);
 
+// Al cargar los médicos se elige el primero y el watch pide sus horarios
 onMounted(() => {
   obtenerTurnos();
-  obtenerHorarios();
+  obtenerMedicos();
 });
 </script>
 
@@ -233,22 +324,42 @@ onMounted(() => {
       <form class="form-reserva" @submit.prevent="reservarTurno">
         <div class="fila">
           <label>
-            ID del médico
-            <input v-model.number="medicoId" type="number" min="1" required />
+            Médico
+            <select v-model.number="medicoId" required>
+              <option v-for="m in medicos" :key="m.id" :value="m.id">
+                {{ m.nombre }} — {{ m.especialidad }}
+              </option>
+            </select>
           </label>
 
           <label>
             Fecha
             <input v-model="fecha" type="date" :min="hoy()" required />
           </label>
+        </div>
+
+        <div class="fila">
+          <label>
+            Nombre y apellido del paciente
+            <input
+              v-model="nombre"
+              type="text"
+              placeholder="Ej: Juan Pérez"
+              minlength="2"
+              maxlength="120"
+              autocomplete="off"
+              required
+            />
+          </label>
 
           <label>
-            ID del paciente
+            Email del paciente
             <input
-              v-model.number="pacienteIdReserva"
-              type="number"
-              min="1"
-              placeholder="Ej: 1"
+              v-model="email"
+              type="email"
+              placeholder="Ej: juan@correo.com"
+              maxlength="160"
+              autocomplete="off"
               required
             />
           </label>
@@ -286,16 +397,98 @@ onMounted(() => {
         <div class="fila fila-final">
           <p v-if="bloqueElegido" class="resumen">
             {{ formatearDia(fecha) }}, {{ formatearHora(bloqueElegido.inicio) }}
-            a {{ formatearHora(bloqueElegido.fin) }} · Médico {{ medicoId }}
+            a {{ formatearHora(bloqueElegido.fin) }} ·
+            {{ nombreMedico(medicoId) }}
           </p>
           <p v-else class="nota">Elegí un horario.</p>
 
           <button
             type="submit"
             class="btn btn-primario"
-            :disabled="reservando || !bloqueElegido || !pacienteIdReserva"
+            :disabled="reservando || !bloqueElegido"
           >
             {{ reservando ? 'Reservando…' : 'Reservar Turno' }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Entreturno -->
+    <section class="tarjeta">
+      <h2>Insertar Entreturno</h2>
+
+      <form class="form-reserva" @submit.prevent="insertarEntreturno">
+        <div class="fila">
+          <label>
+            Médico
+            <select v-model.number="entreMedicoId" required>
+              <option v-for="m in medicos" :key="m.id" :value="m.id">
+                {{ m.nombre }} — {{ m.especialidad }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Fecha
+            <input v-model="entreFecha" type="date" :min="hoy()" required />
+          </label>
+
+          <label>
+            Hora exacta
+            <input v-model="entreHora" type="time" required />
+          </label>
+
+          <label>
+            Duración (min, opcional)
+            <input
+              v-model.number="entreDuracion"
+              type="number"
+              min="5"
+              max="120"
+              step="5"
+            />
+          </label>
+        </div>
+
+        <div class="fila">
+          <label>
+            Nombre y apellido del paciente
+            <input
+              v-model="entreNombre"
+              type="text"
+              placeholder="Ej: Juan Pérez"
+              minlength="2"
+              maxlength="120"
+              autocomplete="off"
+              required
+            />
+          </label>
+
+          <label>
+            Email del paciente
+            <input
+              v-model="entreEmail"
+              type="email"
+              placeholder="Ej: juan@correo.com"
+              maxlength="160"
+              autocomplete="off"
+              required
+            />
+          </label>
+        </div>
+
+        <div class="fila fila-final">
+          <p class="nota">
+            Recorta el turno que está en curso a esa hora y usa el tiempo
+            liberado.
+          </p>
+
+          <button
+            type="submit"
+            class="btn btn-primario"
+            :disabled="insertandoEntre || !entreHora"
+          >
+            {{ insertandoEntre ? 'Insertando…' : 'Insertar Entreturno' }}
           </button>
         </div>
       </form>
@@ -328,7 +521,7 @@ onMounted(() => {
           <tbody>
             <tr v-for="turno in turnosOrdenados" :key="turno.id">
               <td><span class="id-chip">#{{ turno.id }}</span></td>
-              <td>{{ turno.medicoId }}</td>
+              <td>{{ nombreMedico(turno.medicoId) }}</td>
               <td class="fuerte">
                 {{
                   turno.pacienteNombre ??
@@ -337,10 +530,23 @@ onMounted(() => {
                     : 'Sin asignar')
                 }}
               </td>
-              <td>{{ formatearFecha(turno.fechaHoraInicio) }}</td>
+              <td>
+                {{ formatearFecha(turno.fechaHoraInicio) }}
+                <span class="nota">· {{ minutosTurno(turno) }} min</span>
+              </td>
               <td>
                 <span :class="['badge', claseEstado(turno.estado)]">
                   {{ turno.estado }}
+                </span>
+                <span v-if="turno.esEntreturno" class="badge entreturno">
+                  Entreturno
+                </span>
+                <span
+                  v-if="turno.duracionReducida"
+                  class="badge reducido"
+                  title="Este turno fue acortado por un entreturno"
+                >
+                  Tiempo reducido
                 </span>
               </td>
               <td class="acciones">
@@ -688,6 +894,18 @@ button:disabled {
 .cancelado {
   background: #fee2e2;
   color: #991b1b;
+}
+
+/* Etiquetas de entreturno */
+.entreturno {
+  margin-left: 6px;
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.reducido {
+  margin-left: 6px;
+  background: #ffedd5;
+  color: #9a3412;
 }
 
 /* Acciones */

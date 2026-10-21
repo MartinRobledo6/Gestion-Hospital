@@ -14,6 +14,8 @@ import { ReservarTurnoDto } from './dto/reservar-turnos.dto.js';
 import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
 import { CrearHorarioDto } from './dto/crear-horarios.dto.js';
 import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
+import { CrearMedicoDto } from './dto/crear-medico.dto.js';
+import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
 
 @Controller('admision')
 export class AdmisionController {
@@ -71,4 +73,14 @@ export class AdmisionController {
   solicitarTurno(@Body() dto: SolicitarTurnoDto) {
     return this.admisionService.solicitarTurno(dto);
   }
+
+  @Post('medicos')
+crearMedico(@Body() dto: CrearMedicoDto) {
+  return this.admisionService.crearMedico(dto);
+}
+
+@Post('turnos/entreturno')
+insertarEntreturno(@Body() dto: CrearEntreturnoDto) {
+  return this.admisionService.insertarEntreturno(dto);
+}
 }

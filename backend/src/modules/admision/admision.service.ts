@@ -7,23 +7,55 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Between, Not, In } from 'typeorm';
 import { TurnoEntity } from './entities/turno.entity.js';
 import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
+import { PacienteEntity } from './entities/paciente.entity.js';
+import { MedicoEntity } from './entities/medico.entity.js';
 import { ReservarTurnoDto } from './dto/reservar-turnos.dto.js';
 import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
 import { CrearHorarioDto } from './dto/crear-horarios.dto.js';
-import { PacienteEntity } from './entities/paciente.entity.js';
 import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
+import { CrearMedicoDto } from './dto/crear-medico.dto.js';
+import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
+
+// Transiciones de estado permitidas para un turno
+const TRANSICIONES: Record<string, string[]> = {
+  Programado: ['Confirmado', 'Cancelado'],
+  Confirmado: ['En Sala de Espera', 'Cancelado'],
+  'En Sala de Espera': ['Atendido', 'Cancelado'],
+  Atendido: [],
+  Cancelado: [],
+};
 
 @Injectable()
 export class AdmisionService {
   constructor(
-        @InjectRepository(PacienteEntity)
+    @InjectRepository(PacienteEntity)
     private readonly pacientesRepo: Repository<PacienteEntity>,
     @InjectRepository(TurnoEntity)
     private readonly turnosRepo: Repository<TurnoEntity>,
     @InjectRepository(HorarioMedicoEntity)
     private readonly horariosRepo: Repository<HorarioMedicoEntity>,
+    @InjectRepository(MedicoEntity)
+    private readonly medicosRepo: Repository<MedicoEntity>,
     private readonly dataSource: DataSource,
   ) {}
+
+  // ---------- Pacientes ----------
+
+  // Buscar al paciente por email; si no existe, se crea
+  private async obtenerOCrearPaciente(nombreRaw: string, emailRaw: string) {
+    const email = emailRaw.trim().toLowerCase();
+    const nombre = nombreRaw.trim();
+
+    let paciente = await this.pacientesRepo.findOneBy({ email });
+    if (paciente) {
+      paciente.nombre = nombre;
+    } else {
+      paciente = this.pacientesRepo.create({ nombre, email });
+    }
+    return this.pacientesRepo.save(paciente);
+  }
+
+  // ---------- Turnos ----------
 
   // 0. Listar los turnos guardados, con el nombre del paciente
   async listarTurnos() {
@@ -164,57 +196,27 @@ export class AdmisionService {
     }
   }
 
-  // 3. Cambiar el estado de un turno
+  // 3. Cambiar el estado de un turno (solo transiciones válidas)
   async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto) {
     const turno = await this.turnosRepo.findOneBy({ id });
     if (!turno) {
       throw new NotFoundException(`Turno ${id} no encontrado`);
     }
+
+    const permitidos = TRANSICIONES[turno.estado] ?? [];
+    if (!permitidos.includes(dto.nuevoEstado)) {
+      throw new ConflictException(
+        turno.estado === 'Cancelado'
+          ? 'Un turno cancelado no puede avanzar en el flujo de atención.'
+          : `No se puede pasar un turno de "${turno.estado}" a "${dto.nuevoEstado}".`,
+      );
+    }
+
     turno.estado = dto.nuevoEstado;
     return this.turnosRepo.save(turno);
   }
 
-    // 4. Horarios de atención de un médico
-  listarHorarios(medicoId: number) {
-    return this.horariosRepo.find({
-      where: { medicoId },
-      order: { diaSemana: 'ASC' },
-    });
-  }
-
-  async crearHorario(medicoId: number, dto: CrearHorarioDto) {
-    if (dto.horaFin <= dto.horaInicio) {
-      throw new ConflictException('La hora de fin debe ser posterior a la de inicio.');
-    }
-
-    // obtenerHorariosDisponibles usa un solo horario por médico y día
-    const existente = await this.horariosRepo.findOneBy({
-      medicoId,
-      diaSemana: dto.diaSemana,
-    });
-    if (existente) {
-      throw new ConflictException('El médico ya tiene un horario cargado para ese día.');
-    }
-
-    const horario = this.horariosRepo.create({ medicoId, ...dto });
-    return this.horariosRepo.save(horario);
-  }
-
-  async eliminarHorario(id: number) {
-    const horario = await this.horariosRepo.findOneBy({ id });
-    if (!horario) {
-      throw new NotFoundException(`Horario ${id} no encontrado`);
-    }
-    await this.horariosRepo.remove(horario);
-    return { eliminado: true };
-  }
-    // Médicos que tienen horarios cargados (para el selector del paciente)
-  async listarMedicos() {
-    const horarios = await this.horariosRepo.find();
-    return [...new Set(horarios.map((h) => h.medicoId))].sort((a, b) => a - b);
-  }
-
-  // Pedido de turno hecho por el propio paciente
+  // 4. Pedido de turno hecho por el propio paciente
   async solicitarTurno(dto: SolicitarTurnoDto) {
     const inicio = new Date(dto.fechaHoraInicio);
     const fin = new Date(dto.fechaHoraFin);
@@ -235,16 +237,7 @@ export class AdmisionService {
       throw new ConflictException('Ese horario no está disponible.');
     }
 
-    // Buscar al paciente por email; si no existe, se crea
-    const email = dto.email.trim().toLowerCase();
-    const nombre = dto.nombre.trim();
-    let paciente = await this.pacientesRepo.findOneBy({ email });
-    if (paciente) {
-      paciente.nombre = nombre;
-    } else {
-      paciente = this.pacientesRepo.create({ nombre, email });
-    }
-    paciente = await this.pacientesRepo.save(paciente);
+    const paciente = await this.obtenerOCrearPaciente(dto.nombre, dto.email);
 
     const turno = await this.reservarTurno({
       medicoId: dto.medicoId,
@@ -259,5 +252,167 @@ export class AdmisionService {
       fechaHoraInicio: turno.fechaHoraInicio,
       fechaHoraFin: turno.fechaHoraFin,
     };
+  }
+
+  // 5. Entreturno: recorta el turno en curso y usa el tiempo liberado (HU 1.2)
+  async insertarEntreturno(dto: CrearEntreturnoDto) {
+    const MIN_MINUTOS = 5;
+    const momento = new Date(dto.fechaHoraInicio);
+
+    const medico = await this.medicosRepo.findOneBy({ id: dto.medicoId });
+    if (!medico) {
+      throw new NotFoundException(`Médico ${dto.medicoId} no encontrado`);
+    }
+
+    const paciente = await this.obtenerOCrearPaciente(dto.nombre, dto.email);
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Turno que está en curso en ese momento (queda bloqueado)
+      const afectado = await queryRunner.manager
+        .createQueryBuilder(TurnoEntity, 't')
+        .setLock('pessimistic_write')
+        .where('t.medicoId = :medicoId', { medicoId: dto.medicoId })
+        .andWhere('t.estado != :cancelado', { cancelado: 'Cancelado' })
+        .andWhere(
+          't.fechaHoraInicio < :momento AND t.fechaHoraFin > :momento',
+          { momento },
+        )
+        .getOne();
+
+      if (!afectado) {
+        throw new ConflictException(
+          'En ese horario no hay un turno para acortar. Si está libre, reservalo como turno normal.',
+        );
+      }
+
+      if (
+        afectado.estado === 'Atendido' ||
+        afectado.estado === 'En Sala de Espera'
+      ) {
+        throw new ConflictException(
+          `No se puede acortar un turno en estado "${afectado.estado}".`,
+        );
+      }
+
+      const inicioOriginal = new Date(afectado.fechaHoraInicio);
+      const finOriginal = new Date(afectado.fechaHoraFin);
+
+      const minutosQueQuedan =
+        (momento.getTime() - inicioOriginal.getTime()) / 60000;
+      if (minutosQueQuedan < MIN_MINUTOS) {
+        throw new ConflictException(
+          `El turno afectado quedaría con menos de ${MIN_MINUTOS} minutos.`,
+        );
+      }
+
+      const finEntreturno = dto.duracionMinutos
+        ? new Date(momento.getTime() + dto.duracionMinutos * 60000)
+        : finOriginal;
+
+      if (finEntreturno.getTime() > finOriginal.getTime()) {
+        throw new ConflictException(
+          'El entreturno no entra en el tiempo del turno que se recorta.',
+        );
+      }
+      if ((finEntreturno.getTime() - momento.getTime()) / 60000 < MIN_MINUTOS) {
+        throw new ConflictException(
+          `El entreturno tiene que durar al menos ${MIN_MINUTOS} minutos.`,
+        );
+      }
+
+      // 1) Recortar el turno afectado
+      afectado.fechaHoraFin = momento;
+      afectado.duracionReducida = true;
+      await queryRunner.manager.save(afectado);
+
+      // 2) Crear el entreturno en el tramo liberado
+      const entreturno = queryRunner.manager.create(TurnoEntity, {
+        medicoId: dto.medicoId,
+        pacienteId: paciente.id,
+        fechaHoraInicio: momento,
+        fechaHoraFin: finEntreturno,
+        estado: 'Programado',
+        esEntreturno: true,
+      });
+      const guardado = await queryRunner.manager.save(entreturno);
+
+      await queryRunner.commitTransaction();
+      return guardado;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ---------- Horarios de atención ----------
+
+  listarHorarios(medicoId: number) {
+    return this.horariosRepo.find({
+      where: { medicoId },
+      order: { diaSemana: 'ASC' },
+    });
+  }
+
+  async crearHorario(medicoId: number, dto: CrearHorarioDto) {
+    if (dto.horaFin <= dto.horaInicio) {
+      throw new ConflictException(
+        'La hora de fin debe ser posterior a la de inicio.',
+      );
+    }
+
+    // obtenerHorariosDisponibles usa un solo horario por médico y día
+    const existente = await this.horariosRepo.findOneBy({
+      medicoId,
+      diaSemana: dto.diaSemana,
+    });
+    if (existente) {
+      throw new ConflictException(
+        'El médico ya tiene un horario cargado para ese día.',
+      );
+    }
+
+    const horario = this.horariosRepo.create({ medicoId, ...dto });
+    return this.horariosRepo.save(horario);
+  }
+
+  async eliminarHorario(id: number) {
+    const horario = await this.horariosRepo.findOneBy({ id });
+    if (!horario) {
+      throw new NotFoundException(`Horario ${id} no encontrado`);
+    }
+    await this.horariosRepo.remove(horario);
+    return { eliminado: true };
+  }
+
+  // ---------- Médicos ----------
+
+  // Todos los médicos cargados (para los selectores)
+  listarMedicos() {
+    return this.medicosRepo.find({ order: { nombre: 'ASC' } });
+  }
+
+  async crearMedico(dto: CrearMedicoDto) {
+    const nombre = dto.nombre.trim();
+    const especialidad = dto.especialidad.trim();
+
+    const existente = await this.medicosRepo.findOneBy({
+      nombre,
+      especialidad,
+    });
+    if (existente) {
+      throw new ConflictException(
+        'Ya existe un médico con ese nombre y especialidad.',
+      );
+    }
+
+    return this.medicosRepo.save(
+      this.medicosRepo.create({ nombre, especialidad }),
+    );
   }
 }

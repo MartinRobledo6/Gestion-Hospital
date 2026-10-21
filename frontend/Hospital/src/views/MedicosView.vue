@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 
 interface Horario {
   id: number;
@@ -13,6 +13,12 @@ interface Horario {
 interface Aviso {
   tipo: 'ok' | 'error';
   texto: string;
+}
+
+interface Medico {
+  id: number;
+  nombre: string;
+  especialidad: string;
 }
 
 const API_URL = 'http://localhost:3000/admision';
@@ -30,11 +36,18 @@ const DIAS = [
 // Evita el "possibly undefined" al acceder por índice
 const nombreDia = (n: number) => DIAS[n] ?? '';
 
-const medicoId = ref<number | null>(1);
+// ---------- Estado ----------
+const medicos = ref<Medico[]>([]);
+const medicoId = ref<number | null>(null);
 const horarios = ref<Horario[]>([]);
 const cargando = ref(false);
 const guardando = ref(false);
 const aviso = ref<Aviso | null>(null);
+
+// Formulario de nuevo médico
+const nuevoNombre = ref('');
+const nuevaEspecialidad = ref('');
+const guardandoMedico = ref(false);
 
 // Formulario de nuevo horario
 const diaSemana = ref<number>(1);
@@ -55,6 +68,11 @@ const turnosPorDia = (h: Horario) =>
   Math.floor(
     (aMinutos(h.horaFin) - aMinutos(h.horaInicio)) / h.duracionIntervaloMinutos,
   );
+
+// ---------- Datos derivados ----------
+const medicoActual = computed(
+  () => medicos.value.find((m) => m.id === medicoId.value) ?? null,
+);
 
 const horariosOrdenados = computed(() =>
   [...horarios.value].sort((a, b) => a.diaSemana - b.diaSemana),
@@ -90,6 +108,59 @@ const mostrarAviso = (tipo: Aviso['tipo'], texto: string) => {
 };
 
 // ---------- Llamadas al backend ----------
+const obtenerMedicos = async () => {
+  try {
+    const res = await fetch(`${API_URL}/medicos`);
+    if (!res.ok) {
+      throw new Error(
+        await leerError(res, 'No se pudo obtener la lista de médicos.'),
+      );
+    }
+    medicos.value = await res.json();
+
+    // Mantener el médico elegido; solo pasar al primero si no hay uno válido
+    if (!medicos.value.some((m) => m.id === medicoId.value)) {
+      medicoId.value = medicos.value[0]?.id ?? null; // el watch pide sus horarios
+    }
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  }
+};
+
+const agregarMedico = async () => {
+  guardandoMedico.value = true;
+  aviso.value = null;
+  try {
+    const res = await fetch(`${API_URL}/medicos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: nuevoNombre.value,
+        especialidad: nuevaEspecialidad.value,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(await leerError(res, 'No se pudo guardar el médico.'));
+    }
+
+    const creado: Medico = await res.json();
+    nuevoNombre.value = '';
+    nuevaEspecialidad.value = '';
+
+    await obtenerMedicos();
+    medicoId.value = creado.id; // queda seleccionado para cargarle los horarios
+
+    // El watch de medicoId limpia el aviso: mostrarlo después de que corra
+    await nextTick();
+    mostrarAviso('ok', `${creado.nombre} agregado.`);
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  } finally {
+    guardandoMedico.value = false;
+  }
+};
+
 const obtenerHorarios = async () => {
   if (!medicoId.value) {
     horarios.value = [];
@@ -184,30 +255,85 @@ watch(diasLibres, (lista) => {
   }
 });
 
-onMounted(obtenerHorarios);
+onMounted(obtenerMedicos);
 </script>
 
 <template>
   <main class="vista">
     <header class="encabezado">
       <h1>Médicos y Horarios</h1>
-      <p class="subtitulo">Horarios de atención de cada médico</p>
+      <p class="subtitulo">Alta de médicos y horarios de atención</p>
     </header>
 
     <p v-if="aviso" :class="['aviso', aviso.tipo]" role="status">
       {{ aviso.texto }}
     </p>
 
+    <!-- Alta de médico -->
     <section class="tarjeta">
-      <label class="campo-medico">
-        ID del médico
-        <input v-model.number="medicoId" type="number" min="1" />
+      <h2>Nuevo Médico</h2>
+
+      <form class="form" @submit.prevent="agregarMedico">
+        <div class="fila">
+          <label>
+            Nombre y apellido
+            <input
+              v-model="nuevoNombre"
+              type="text"
+              placeholder="Ej: Dr. Juan Pérez"
+              minlength="2"
+              maxlength="120"
+              autocomplete="off"
+              required
+            />
+          </label>
+
+          <label>
+            Especialidad
+            <input
+              v-model="nuevaEspecialidad"
+              type="text"
+              placeholder="Ej: Cardiología"
+              minlength="2"
+              maxlength="100"
+              autocomplete="off"
+              required
+            />
+          </label>
+
+          <button
+            type="submit"
+            class="btn btn-primario"
+            :disabled="guardandoMedico"
+          >
+            {{ guardandoMedico ? 'Guardando…' : 'Guardar Médico' }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Selector de médico -->
+    <section class="tarjeta">
+      <p v-if="!medicos.length" class="nota">
+        Todavía no hay médicos cargados. Agregá el primero arriba.
+      </p>
+
+      <label v-else class="campo-medico">
+        Médico
+        <select v-model.number="medicoId">
+          <option v-for="m in medicos" :key="m.id" :value="m.id">
+            {{ m.nombre }} — {{ m.especialidad }}
+          </option>
+        </select>
       </label>
     </section>
 
     <!-- Horarios cargados -->
-    <section class="tarjeta">
-      <h2>Horarios de atención del médico {{ medicoId ?? '' }}</h2>
+    <section v-if="medicoActual" class="tarjeta">
+      <h2>
+        Horarios de atención de {{ medicoActual.nombre }}
+        <span class="especialidad">· {{ medicoActual.especialidad }}</span>
+      </h2>
 
       <p v-if="cargando" class="nota">Cargando horarios…</p>
       <p v-else-if="!horarios.length" class="nota">
@@ -247,7 +373,7 @@ onMounted(obtenerHorarios);
     </section>
 
     <!-- Alta de horario -->
-    <section class="tarjeta">
+    <section v-if="medicoActual" class="tarjeta">
       <h2>Nuevo Horario</h2>
 
       <p v-if="!diasLibres.length" class="nota">
@@ -360,6 +486,11 @@ h2 {
   font-weight: 700;
 }
 
+.especialidad {
+  font-weight: 400;
+  color: var(--suave);
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -395,8 +526,12 @@ input {
   background: #fff;
 }
 
-.campo-medico input {
-  max-width: 200px;
+input::placeholder {
+  color: #94a3b8;
+}
+
+.campo-medico select {
+  max-width: 360px;
 }
 
 select:focus-visible,
@@ -543,7 +678,7 @@ button:disabled {
 @media (max-width: 600px) {
   select,
   input,
-  .campo-medico input {
+  .campo-medico select {
     min-width: 0;
     max-width: none;
     width: 100%;

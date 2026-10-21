@@ -20,6 +20,12 @@ export class TurnoEntity {
   @Column({ name: 'Estado', type: 'varchar', length: 50, default: 'Programado' })
   estado: string;
 
+  @Column({ name: 'EsEntreturno', type: 'bit', default: false })
+  esEntreturno: boolean;
+
+  @Column({ name: 'DuracionReducida', type: 'bit', default: false })
+  duracionReducida: boolean;
+
   @VersionColumn({ name: 'RowVersion' })
   version: number;
 }

@@ -5,9 +5,12 @@ import { AdmisionService } from './admision.service.js';
 import { TurnoEntity } from './entities/turno.entity.js';
 import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
 import { PacienteEntity } from './entities/paciente.entity.js';
+import { MedicoEntity } from './entities/medico.entity.js';
+
+
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TurnoEntity, HorarioMedicoEntity, PacienteEntity])],
+  imports: [TypeOrmModule.forFeature([TurnoEntity, HorarioMedicoEntity, PacienteEntity, MedicoEntity])],
   controllers: [AdmisionController],
   providers: [AdmisionService],
   exports: [AdmisionService],

@@ -5,6 +5,11 @@ interface Bloque {
   inicio: string;
   fin: string;
 }
+interface Medico {
+  id: number;
+  nombre: string;
+  especialidad: string;
+}
 
 const API_URL = 'http://localhost:3000/admision';
 
@@ -18,7 +23,7 @@ const hoy = () => {
 
 const nombre = ref('');
 const email = ref('');
-const medicos = ref<number[]>([]);
+const medicos = ref<Medico[]>([]); 
 const medicoId = ref<number | null>(null);
 const fecha = ref(hoy());
 const horarios = ref<Bloque[]>([]);
@@ -66,9 +71,9 @@ const obtenerMedicos = async () => {
     const res = await fetch(`${API_URL}/medicos`);
     if (!res.ok) throw new Error('No se pudo obtener la lista de médicos.');
     medicos.value = await res.json();
-    medicoId.value = medicos.value[0] ?? null;
+    medicoId.value = medicos.value[0]?.id ?? null;   // <- cambio: agregar ?.id
   } catch (err: any) {
-    error.value = err.message;
+    mostrarAviso('error', err.message);
   }
 };
 
@@ -200,8 +205,8 @@ onMounted(obtenerMedicos);
           <label>
             Médico
             <select v-model.number="medicoId" required>
-              <option v-for="m in medicos" :key="m" :value="m">
-                Médico {{ m }}
+              <option v-for="m in medicos" :key="m.id" :value="m.id">
+                {{ m.nombre }} — {{ m.especialidad }}
               </option>
             </select>
           </label>
