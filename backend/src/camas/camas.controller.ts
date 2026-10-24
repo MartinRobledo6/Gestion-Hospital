@@ -1,14 +1,16 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, Sse, MessageEvent } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Observable, fromEvent, map } from 'rxjs';
 import { CamasService } from './camas.service.js';
 import { AsignarCamaDto } from './dto/asignar-cama.dto.js';
-import { liberarCamaDto } from './dto/liberar-cama.dto.js';
-import {limpiarCamaDto} from './dto/limpiar-cama.dto.js'
-import { bloqueoCamaDto } from './dto/bloquear-cama.dto.js';
-import { desbloquearCamaDto } from './dto/desbloquear-cama.dto.js';
+import { NumeroCamaDto } from './dto/numero-cama.dto.js';
 
 @Controller('camas')
 export class CamasController {
-  constructor(private readonly camasService: CamasService) {}
+  constructor(
+    private readonly camasService: CamasService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   @Post('asignar')
   asignar(@Body() body: AsignarCamaDto) {
@@ -16,28 +18,35 @@ export class CamasController {
   }
 
   @Post('liberar')
-  liberar(@Body() body: liberarCamaDto){
-    return this.camasService.liberarCama(body.numero)
+  liberar(@Body() body: NumeroCamaDto) {
+    return this.camasService.liberarCama(body.numero);
   }
 
   @Post('limpiar')
-  limpiar(@Body() body: limpiarCamaDto){
-    return this.camasService.limpiarCama(body.numero)
+  limpiar(@Body() body: NumeroCamaDto) {
+    return this.camasService.limpiarCama(body.numero);
   }
 
   @Post('bloquear')
-  bloquear(@Body() body: bloqueoCamaDto){
-    return this.camasService.bloquearCama(body.numero)
+  bloquear(@Body() body: NumeroCamaDto) {
+    return this.camasService.bloquearCama(body.numero);
   }
 
   @Post('desbloquear')
-  desbloquear(@Body() body: desbloquearCamaDto){
-    return this.camasService.desbloquearCama(body.numero)
+  desbloquear(@Body() body: NumeroCamaDto) {
+    return this.camasService.desbloquearCama(body.numero);
   }
 
   @Get('listado')
-  listado(){
-  return this.camasService.obtenerCamas()
+  listado() {
+    return this.camasService.obtenerCamas();
   }
 
+  // Monitor en tiempo real (Server-Sent Events): GET /camas/eventos
+  @Sse('eventos')
+  eventos(): Observable<MessageEvent> {
+    return fromEvent(this.events, 'cama.estado-cambiado').pipe(
+      map((data) => ({ data }) as MessageEvent),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CamasModule } from './camas/camas.module.js';
 import { InventarioModule } from './inventario/inventario.module.js';
 import {EventEmitterModule} from "@nestjs/event-emitter";
+import { HceModule } from './hce/hce.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import {EventEmitterModule} from "@nestjs/event-emitter";
     EventEmitterModule.forRoot(),
     CamasModule,
     InventarioModule,
+    HceModule,
   ],
   controllers: [],
   providers: [],

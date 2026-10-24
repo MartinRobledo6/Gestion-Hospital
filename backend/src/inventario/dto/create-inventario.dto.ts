@@ -1,6 +1,16 @@
+import { IsInt, IsNotEmpty, IsNumber, IsString, MaxLength, Min } from 'class-validator';
+
 export class CreateInventarioDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
   Nombre: string;
-  Categoria: string;
-  CantidadTotal: number;
-  CantidadDisponible: number;
+
+  @IsInt()
+  @Min(0)
+  StockActual: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  PrecioUnitario: number;
 }

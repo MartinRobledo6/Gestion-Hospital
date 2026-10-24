@@ -1,155 +1,107 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MetadataWithSuchNameAlreadyExistsError, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { Cama, EstadoCama } from './entities/cama.entity.js';
 import { AsignacionCama } from './entities/asignacion-cama.entity.js';
-import { dateTimestampProvider } from 'rxjs/internal/scheduler/dateTimestampProvider';
+import { OperacionCama, siguienteEstado } from './estados/cama-state.js';
+import { esViolacionUnique } from '../common/db-errors.js';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class CamasService {
   constructor(
     @InjectRepository(Cama)
-    private camasRepository: Repository<Cama>,
-    
-    @InjectRepository(AsignacionCama)
-    private asignacionRepository: Repository<AsignacionCama>,
+    private readonly camasRepository: Repository<Cama>,
+    private readonly events: EventEmitter2,
   ) {}
 
-  async asignarCama(camaNumero: string, pacienteId: number) {
-    return await this.camasRepository.manager.transaction(async (transactionalEntityManager) => {
-      
-      const camaActual = await transactionalEntityManager.findOne(Cama, { where: { Numero: camaNumero } });
+  asignarCama(numero: string, pacienteId: number) {
+    return this.transicionar(numero, 'asignar', async (m, cama) => {
+      await m.insert(AsignacionCama, { CamaId: cama.Id, PacienteId: pacienteId });
+    }, 'Cama asignada exitosamente');
+  }
 
-      if (!camaActual) throw new BadRequestException('La cama no existe');
-      if (camaActual.Estado !== EstadoCama.LIBRES) throw new BadRequestException(`La cama está ${camaActual.Estado}, no se puede asignar.`);
+  liberarCama(numero: string) {
+    return this.transicionar(numero, 'liberar', async (m, cama) => {
+      const r = await m.update(
+        AsignacionCama,
+        { CamaId: cama.Id, FechaEgreso: IsNull() },
+        { FechaEgreso: new Date() },
+      );
+      if (!r.affected) {
+        throw new ConflictException('La cama figura ocupada pero no tiene una asignación activa.');
+      }
+    }, 'Paciente dado de alta. Cama enviada a limpieza');
+  }
 
-      try {
-        camaActual.Estado = EstadoCama.OCUPADAS;
-        await transactionalEntityManager.save(Cama, camaActual);
+  limpiarCama(numero: string) {
+    return this.transicionar(numero, 'limpiar', undefined, 'Cama libre y lista para usar');
+  }
 
-        const nuevaAsignacion = transactionalEntityManager.create(AsignacionCama, {
-          CamaId: camaActual.Id,
-          PacienteId: pacienteId 
-        });
-        await transactionalEntityManager.save(AsignacionCama, nuevaAsignacion);
-        
-        return { 
-          mensaje: 'Cama asignada exitosamente', 
-          cama: camaActual, 
-          asignacion: nuevaAsignacion 
-        };
-      } catch (error) {
-        if (error instanceof Error && error.name === 'OptimisticLockVersionMismatchError') {
-          throw new ConflictException('Error: La cama acaba de ser ocupada por otro usuario.');
+  bloquearCama(numero: string) {
+    return this.transicionar(numero, 'bloquear', undefined, 'Cama bloqueada exitosamente');
+  }
+
+  desbloquearCama(numero: string) {
+    return this.transicionar(numero, 'desbloquear', undefined, 'Cama desbloqueada, está libre');
+  }
+
+  obtenerCamas() {
+    return this.camasRepository.find({ order: { Numero: 'ASC' } });
+  }
+
+  /**
+   * Único punto de entrada para cambiar el estado de una cama:
+   *  1. valida la transición con la máquina de estados,
+   *  2. hace un UPDATE condicional (estado + versión leídos) => bloqueo optimista real,
+   *  3. ejecuta el efecto lateral (asignación) en la MISMA transacción.
+   */
+  private async transicionar(
+    numero: string,
+    op: OperacionCama,
+    efecto: ((m: EntityManager, cama: Cama) => Promise<void>) | undefined,
+    mensaje: string,
+  ) {
+    let resultado: { cama: Cama; desde: EstadoCama };
+    try {
+      resultado = await this.camasRepository.manager.transaction(async (m) => {
+        const cama = await m.findOne(Cama, { where: { Numero: numero } });
+        if (!cama) throw new NotFoundException(`La cama ${numero} no existe`);
+
+        const anterior = cama.Estado;
+        const nuevo = siguienteEstado(anterior, op); // lanza 409 si la transición es inválida
+
+        const r = await m.update(
+          Cama,
+          { Id: cama.Id, Estado: anterior, Version: cama.Version },
+          { Estado: nuevo, Version: () => 'RowVersion + 1' },
+        );
+        if (!r.affected) {
+          throw new ConflictException(op === 'asignar'
+              ? 'La cama acaba de ser ocupada por otro usuario.'
+              : 'La cama acaba de ser modificada por otro usuario. Actualizá y reintentá.',);
         }
-        throw error; 
+
+        if (efecto) await efecto(m, cama);
+
+        cama.Estado = nuevo;
+        cama.Version += 1;
+        return { cama, desde: anterior };
+      });
+    } catch (e) {
+      // Red de seguridad: los índices únicos filtrados de la BD también frenan la doble asignación
+      if (esViolacionUnique(e)) {
+        throw new ConflictException('La cama o el paciente ya tienen una asignación activa.');
       }
+      throw e;
+    }
+    this.events.emit('cama.estado-cambiado', {
+      camaId: resultado.cama.Id,
+      numero: resultado.cama.Numero,
+      desde: resultado.desde,
+      hasta: resultado.cama.Estado,
+      timestamp: new Date(),
     });
-  }
-
-  async liberarCama(CamaNumero: string){
-    
-    const camaActual = await this.camasRepository.findOne({ where: { Numero: CamaNumero}});
-
-    if(!camaActual){
-      throw new BadRequestException('La cama no existe')
-    }
-
-    if(camaActual.Estado !== EstadoCama.OCUPADAS){
-      throw new BadRequestException(`La cama esta ${camaActual.Estado}`)
-    }
-
-    return await this.camasRepository.manager.transaction(async (transactionalEntityManager) => {
-      try{
-          camaActual.Estado = EstadoCama.EN_LIMPIEZA
-          await transactionalEntityManager.save(Cama, camaActual)
-          
-          const asignacionActiva = await transactionalEntityManager.findOne(AsignacionCama, {
-            where:{
-              CamaId: camaActual.Id,
-              FechaEgreso: IsNull(),
-            },
-          });
-          if(!asignacionActiva){
-            throw new BadRequestException('La cama figura ocupada pero no se encontro el registro del paciente')
-          }
-
-          asignacionActiva.FechaEgreso = new Date();
-          await transactionalEntityManager.save(AsignacionCama, asignacionActiva)
-
-          return{
-            mensaje: 'Paciente dado de alta. Cama enviada a limpieza',
-            cama: camaActual,
-            asignacion: asignacionActiva,
-          };
-      } catch (error){
-        throw error;
-      }
-    })
-  }
-
-  async limpiarCama(camaNumero: string){
-
-    const camaActual = await this.camasRepository.findOne({ where: {Numero: camaNumero}});
-
-    if(!camaActual){
-      throw new BadRequestException('La cama no existe')
-    }
-
-    if(camaActual.Estado !== EstadoCama.EN_LIMPIEZA){
-      throw new BadRequestException(`La cama esta ${camaActual.Estado}, no se puede limpiar`)
-    }
-
-    camaActual.Estado = EstadoCama.LIBRES
-    await this.camasRepository.save(camaActual)
-
-    return{
-      mensaje: 'Cama libre y lista para usar',
-      cama: camaActual,
-    }
-  }
-
-  async obtenerCamas(){
-    return await this.camasRepository.find()
-  }
-
-  async bloquearCama(camaNumero: string){
-    const camaActual = await this.camasRepository.findOne({ where: {Numero: camaNumero}});
-
-    if(!camaActual){
-      throw new BadRequestException('La cama no existe')
-    }
-
-    if(camaActual.Estado === EstadoCama.BLOQUEADAS){
-      throw new BadRequestException(`La cama esta ${camaActual.Estado}, no se puede bloquear`)
-    }
-
-    camaActual.Estado = EstadoCama.BLOQUEADAS
-    await this.camasRepository.save(camaActual)
-
-    return{
-      mensaje: 'Cama bloqueada exitosamente',
-      cama: camaActual,
-    }
-  }
-
-  async  desbloquearCama(camaNumero: string){
-    const camaActual = await this.camasRepository.findOne({where: {Numero: camaNumero}});
-
-    if(!camaActual){
-      throw new BadRequestException('La cama no  existe')
-    }
-
-    if(camaActual.Estado !== EstadoCama.BLOQUEADAS){
-      throw new BadRequestException(`La cama esta ${camaActual.Estado}`)
-    }
-
-    camaActual.Estado = EstadoCama.LIBRES
-    await this.camasRepository.save(camaActual)
-
-    return{
-      mensaje: 'Cama desbloqueada, esta libre',
-      cama: camaActual
-    }
+    return { mensaje, cama: resultado.cama };
   }
 }

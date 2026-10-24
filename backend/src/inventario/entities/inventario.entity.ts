@@ -10,7 +10,11 @@ export class Inventario {
 
   @Column({ type: 'int' })
   StockActual: number;
-
+  
+  @Column({ type: 'int', default: 0 })
+  StockMinimo: number;
+  
   @Column('decimal', { precision: 18, scale: 2 })
   PrecioUnitario: number;
+  
 }
