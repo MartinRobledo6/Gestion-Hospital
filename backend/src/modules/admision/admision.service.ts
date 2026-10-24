@@ -3,7 +3,9 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { IsIn} from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Between, Not, In } from 'typeorm';
 import { TurnoEntity } from './entities/turno.entity.js';
@@ -11,21 +13,18 @@ import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
 import { PacienteEntity } from './entities/paciente.entity.js';
 import { MedicoEntity, TipoProfesional } from './entities/medico.entity.js';
 import { ReservarTurnoDto } from './dto/reservar-turnos.dto.js';
-import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
 import { CrearHorarioDto } from './dto/crear-horarios.dto.js';
 import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
 import { CrearMedicoDto } from './dto/crear-medico.dto.js';
 import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
 import { EspecialidadEntity } from './entities/especialidad.entity.js';
+import { ESTADOS, EstadosTurnos } from './estados/estados-turnos.js';
 
-// Transiciones de estado permitidas para un turno
-const TRANSICIONES: Record<string, string[]> = {
-  Programado: ['Confirmado', 'Cancelado'],
-  Confirmado: ['En Sala de Espera', 'Cancelado'],
-  'En Sala de Espera': ['Atendido', 'Cancelado'],
-  Atendido: [],
-  Cancelado: [],
-};
+
+export class CambiarEstadoTurnoDto {
+  @IsIn(EstadosTurnos)
+  nuevoEstado: string;
+}
 
 @Injectable()
 export class AdmisionService {
@@ -42,6 +41,7 @@ export class AdmisionService {
     @InjectRepository(EspecialidadEntity)
     private readonly especialidadesRepo: Repository<EspecialidadEntity>,
   ) {}
+  
 
   // ---------- Pacientes ----------
 
@@ -156,14 +156,22 @@ export class AdmisionService {
   // 2. Guardar únicamente el turno elegido en la tabla Turnos con control de concurrencia
   async reservarTurno(dto: ReservarTurnoDto) {
     const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
 
-    try {
-      const inicio = new Date(dto.fechaHoraInicio);
-      const fin = new Date(dto.fechaHoraFin);
+  try {
+    const inicio = new Date(dto.fechaHoraInicio);
+    const fin = new Date(dto.fechaHoraFin);
 
-      // Bloqueo y verificación de solapamiento en BD para evitar doble reserva simultánea
+    const medico = await queryRunner.manager
+      .createQueryBuilder(MedicoEntity, 'm')
+      .setLock('pessimistic_write')
+      .where('m.id = :id', { id: dto.medicoId })
+      .getOne();
+
+    if (!medico) {
+      throw new NotFoundException(`Médico ${dto.medicoId} no encontrado`);
+    }
       const solapado = await queryRunner.manager
         .createQueryBuilder(TurnoEntity, 't')
         .setLock('pessimistic_write')
@@ -200,25 +208,24 @@ export class AdmisionService {
     }
   }
 
-  // 3. Cambiar el estado de un turno (solo transiciones válidas)
-  async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto) {
-    const turno = await this.turnosRepo.findOneBy({ id });
-    if (!turno) {
-      throw new NotFoundException(`Turno ${id} no encontrado`);
-    }
-
-    const permitidos = TRANSICIONES[turno.estado] ?? [];
-    if (!permitidos.includes(dto.nuevoEstado)) {
-      throw new ConflictException(
-        turno.estado === 'Cancelado'
-          ? 'Un turno cancelado no puede avanzar en el flujo de atención.'
-          : `No se puede pasar un turno de "${turno.estado}" a "${dto.nuevoEstado}".`,
-      );
-    }
-
-    turno.estado = dto.nuevoEstado;
-    return this.turnosRepo.save(turno);
+ async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto) {
+  const turno = await this.turnosRepo.findOneBy({ id });
+  if (!turno) {
+    throw new NotFoundException(`Turno ${id} no encontrado`);
   }
+
+  const estadoActual = ESTADOS[turno.estado];
+  if (!estadoActual) {
+    throw new InternalServerErrorException(
+      `El turno ${id} tiene un estado desconocido: "${turno.estado}".`,
+    );
+  }
+
+  const nuevoEstado = estadoActual.transicionar(dto.nuevoEstado);
+
+  turno.estado = nuevoEstado.nombre;
+  return this.turnosRepo.save(turno);
+}
 
   // 4. Pedido de turno hecho por el propio paciente
   async solicitarTurno(dto: SolicitarTurnoDto) {
