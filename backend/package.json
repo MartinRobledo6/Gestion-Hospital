@@ -1,0 +1,19 @@
+{
+  "name": "backend",
+  "version": "0.0.1",
+  "description": "Backend para sistema de gestion hospitalaria",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@nestjs/platform-express": "^12.2.0",
+    "@nestjs/typeorm": "^12.0.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "mssql": "^12.7.11",
+    "pg": "^8.23.1",
+    "typeorm": "^1.1.2"
+  }
+}
