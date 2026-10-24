@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 interface Cama {
   Id: number
@@ -145,9 +145,15 @@ const liberar = (numero: string) => procesarAccion('liberar', numero)
 const limpiar = (numero: string) => procesarAccion('limpiar', numero)
 const desbloquear = (numero: string) => procesarAccion('desbloquear', numero)
 
+let eventos: EventSource | null = null
 onMounted(() => {
   fetchCamas()
+
+  eventos = new EventSource('http://localhost:3000/camas/eventos')
+  eventos.onmessage = () => fetchCamas()
 })
+
+onUnmounted(() => eventos?.close())
 </script>
 
 <style scoped>

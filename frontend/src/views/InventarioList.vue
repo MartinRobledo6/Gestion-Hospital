@@ -24,7 +24,7 @@
           />
         </div>
         <div class="input-group">
-          <label>Precio Unitario (\$)</label>
+          <label>Precio Unitario ($)</label>
           <input
             v-model.number="nuevoInsumo.PrecioUnitario"
             type="number"
@@ -64,7 +64,7 @@
                 {{ insumo.StockActual }} u.
               </span>
             </td>
-            <td>\$ {{ insumo.PrecioUnitario }}</td>
+            <td>$ {{ insumo.PrecioUnitario }}</td>
             <td class="text-center">
               <button @click="eliminarInsumo(insumo.Id)" class="btn btn-danger">Eliminar</button>
             </td>
