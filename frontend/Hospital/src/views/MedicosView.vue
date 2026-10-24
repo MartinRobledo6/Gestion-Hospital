@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 
+// ---------- Tipos ----------
+type TipoProfesional = 'medico' | 'enfermero';
+
 interface Horario {
   id: number;
   medicoId: number;
@@ -18,7 +21,15 @@ interface Aviso {
 interface Medico {
   id: number;
   nombre: string;
+  tipo: TipoProfesional;
+  especialidadId: number | null;
   especialidad: string;
+}
+
+interface Especialidad {
+  id: number;
+  nombre: string;
+  tipo: TipoProfesional;
 }
 
 const API_URL = 'http://localhost:3000/admision';
@@ -36,17 +47,22 @@ const DIAS = [
 // Evita el "possibly undefined" al acceder por índice
 const nombreDia = (n: number) => DIAS[n] ?? '';
 
+const etiquetaTipo = (t: TipoProfesional) =>
+  t === 'medico' ? 'Médico' : 'Enfermero';
+
 // ---------- Estado ----------
 const medicos = ref<Medico[]>([]);
+const especialidades = ref<Especialidad[]>([]);
 const medicoId = ref<number | null>(null);
 const horarios = ref<Horario[]>([]);
 const cargando = ref(false);
 const guardando = ref(false);
 const aviso = ref<Aviso | null>(null);
 
-// Formulario de nuevo médico
+// Formulario de nuevo profesional
 const nuevoNombre = ref('');
-const nuevaEspecialidad = ref('');
+const nuevoTipo = ref<TipoProfesional>('medico');
+const nuevaEspecialidadId = ref<number | null>(null);
 const guardandoMedico = ref(false);
 
 // Formulario de nuevo horario
@@ -85,6 +101,11 @@ const diasLibres = computed(() =>
   ),
 );
 
+// Solo las especialidades que corresponden al tipo elegido en el formulario
+const especialidadesFiltradas = computed(() =>
+  especialidades.value.filter((e) => e.tipo === nuevoTipo.value),
+);
+
 const previsualizacion = computed(() => {
   const total = aMinutos(horaFin.value) - aMinutos(horaInicio.value);
   if (!intervalo.value || total <= 0) return null;
@@ -113,15 +134,30 @@ const obtenerMedicos = async () => {
     const res = await fetch(`${API_URL}/medicos`);
     if (!res.ok) {
       throw new Error(
-        await leerError(res, 'No se pudo obtener la lista de médicos.'),
+        await leerError(res, 'No se pudo obtener la lista de profesionales.'),
       );
     }
     medicos.value = await res.json();
 
-    // Mantener el médico elegido; solo pasar al primero si no hay uno válido
+    // Mantener el profesional elegido; solo pasar al primero si no hay uno válido
     if (!medicos.value.some((m) => m.id === medicoId.value)) {
       medicoId.value = medicos.value[0]?.id ?? null; // el watch pide sus horarios
     }
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  }
+};
+
+const obtenerEspecialidades = async () => {
+  try {
+    const res = await fetch(`${API_URL}/especialidades`);
+    if (!res.ok) {
+      throw new Error(
+        await leerError(res, 'No se pudieron obtener las especialidades.'),
+      );
+    }
+    // La especialidad seleccionada la resuelve el watch de especialidadesFiltradas
+    especialidades.value = await res.json();
   } catch (err: any) {
     mostrarAviso('error', err.message);
   }
@@ -136,17 +172,17 @@ const agregarMedico = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nombre: nuevoNombre.value,
-        especialidad: nuevaEspecialidad.value,
+        tipo: nuevoTipo.value,
+        especialidadId: nuevaEspecialidadId.value,
       }),
     });
 
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudo guardar el médico.'));
+      throw new Error(await leerError(res, 'No se pudo guardar el profesional.'));
     }
 
     const creado: Medico = await res.json();
     nuevoNombre.value = '';
-    nuevaEspecialidad.value = '';
 
     await obtenerMedicos();
     medicoId.value = creado.id; // queda seleccionado para cargarle los horarios
@@ -242,6 +278,7 @@ const eliminarHorario = async (h: Horario) => {
   }
 };
 
+// ---------- Watchers y ciclo de vida ----------
 watch(medicoId, () => {
   aviso.value = null;
   obtenerHorarios();
@@ -255,23 +292,34 @@ watch(diasLibres, (lista) => {
   }
 });
 
-onMounted(obtenerMedicos);
+// Si la especialidad elegida ya no está en la lista filtrada, pasar a la primera.
+// Cubre tanto el cambio de tipo como la llegada de las especialidades del backend.
+watch(especialidadesFiltradas, (lista) => {
+  if (!lista.some((e) => e.id === nuevaEspecialidadId.value)) {
+    nuevaEspecialidadId.value = lista[0]?.id ?? null;
+  }
+});
+
+onMounted(() => {
+  obtenerMedicos();
+  obtenerEspecialidades();
+});
 </script>
 
 <template>
   <main class="vista">
     <header class="encabezado">
       <h1>Médicos y Horarios</h1>
-      <p class="subtitulo">Alta de médicos y horarios de atención</p>
+      <p class="subtitulo">Alta de profesionales y horarios de atención</p>
     </header>
 
     <p v-if="aviso" :class="['aviso', aviso.tipo]" role="status">
       {{ aviso.texto }}
     </p>
 
-    <!-- Alta de médico -->
+    <!-- Alta de profesional -->
     <section class="tarjeta">
-      <h2>Nuevo Médico</h2>
+      <h2>Nuevo Profesional</h2>
 
       <form class="form" @submit.prevent="agregarMedico">
         <div class="fila">
@@ -289,40 +337,48 @@ onMounted(obtenerMedicos);
           </label>
 
           <label>
+            Tipo
+            <select v-model="nuevoTipo" required>
+              <option value="medico">Médico</option>
+              <option value="enfermero">Enfermero</option>
+            </select>
+          </label>
+
+          <label>
             Especialidad
-            <input
-              v-model="nuevaEspecialidad"
-              type="text"
-              placeholder="Ej: Cardiología"
-              minlength="2"
-              maxlength="100"
-              autocomplete="off"
-              required
-            />
+            <select v-model.number="nuevaEspecialidadId" required>
+              <option
+                v-for="e in especialidadesFiltradas"
+                :key="e.id"
+                :value="e.id"
+              >
+                {{ e.nombre }}
+              </option>
+            </select>
           </label>
 
           <button
             type="submit"
             class="btn btn-primario"
-            :disabled="guardandoMedico"
+            :disabled="guardandoMedico || !nuevaEspecialidadId"
           >
-            {{ guardandoMedico ? 'Guardando…' : 'Guardar Médico' }}
+            {{ guardandoMedico ? 'Guardando…' : 'Guardar Profesional' }}
           </button>
         </div>
       </form>
     </section>
 
-    <!-- Selector de médico -->
+    <!-- Selector de profesional -->
     <section class="tarjeta">
       <p v-if="!medicos.length" class="nota">
-        Todavía no hay médicos cargados. Agregá el primero arriba.
+        Todavía no hay profesionales cargados. Agregá el primero arriba.
       </p>
 
       <label v-else class="campo-medico">
-        Médico
+        Profesional
         <select v-model.number="medicoId">
           <option v-for="m in medicos" :key="m.id" :value="m.id">
-            {{ m.nombre }} — {{ m.especialidad }}
+            {{ m.nombre }} ({{ etiquetaTipo(m.tipo) }}) — {{ m.especialidad }}
           </option>
         </select>
       </label>
@@ -337,7 +393,7 @@ onMounted(obtenerMedicos);
 
       <p v-if="cargando" class="nota">Cargando horarios…</p>
       <p v-else-if="!horarios.length" class="nota">
-        Este médico todavía no tiene horarios cargados.
+        Este profesional todavía no tiene horarios cargados.
       </p>
 
       <div v-else class="tabla-wrap">
@@ -360,7 +416,9 @@ onMounted(obtenerMedicos);
               <td>{{ hhmm(h.horaInicio) }}</td>
               <td>{{ hhmm(h.horaFin) }}</td>
               <td>{{ h.duracionIntervaloMinutos }} min</td>
-              <td><span class="badge verde">{{ turnosPorDia(h) }} turnos</span></td>
+              <td>
+                <span class="badge verde">{{ turnosPorDia(h) }} turnos</span>
+              </td>
               <td class="centro">
                 <button class="btn btn-peligro" @click="eliminarHorario(h)">
                   Eliminar

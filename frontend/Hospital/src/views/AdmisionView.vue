@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 
+// ---------- Tipos ----------
+type TipoProfesional = 'medico' | 'enfermero';
+
 interface Turno {
   id: number;
   pacienteId: number | null;
@@ -26,6 +29,7 @@ interface Aviso {
 interface Medico {
   id: number;
   nombre: string;
+  tipo: TipoProfesional;
   especialidad: string;
 }
 
@@ -46,7 +50,7 @@ const hoy = () => {
   return `${f.getFullYear()}-${mes}-${dia}`;
 };
 
-// Selección para reservar: médico -> fecha -> horario -> datos del paciente
+// Selección para reservar: profesional -> fecha -> horario -> datos del paciente
 const medicos = ref<Medico[]>([]);
 const medicoId = ref<number | null>(null);
 const fecha = ref<string>(hoy());
@@ -92,9 +96,12 @@ const formatearDia = (clave: string) =>
 const claseEstado = (estado: string) =>
   estado.toLowerCase().replace(/ /g, '-');
 
-// Nombre del médico a partir de su id
+const etiquetaTipo = (t: TipoProfesional) =>
+  t === 'medico' ? 'Médico' : 'Enfermero';
+
+// Nombre del profesional a partir de su id
 const nombreMedico = (id: number | null) =>
-  medicos.value.find((m) => m.id === id)?.nombre ?? `Médico ${id ?? ''}`;
+  medicos.value.find((m) => m.id === id)?.nombre ?? `Profesional ${id ?? ''}`;
 
 // Minutos que dura un turno (muestra el tiempo reducido por un entreturno)
 const minutosTurno = (t: Turno) =>
@@ -148,7 +155,7 @@ const obtenerTurnos = async () => {
 const obtenerMedicos = async () => {
   try {
     const res = await fetch(`${API_URL}/medicos`);
-    if (!res.ok) throw new Error('No se pudo obtener la lista de médicos.');
+    if (!res.ok) throw new Error('No se pudo obtener la lista de profesionales.');
     medicos.value = await res.json();
 
     // Mantener la elección actual; solo pasar al primero si no hay una válida
@@ -287,10 +294,10 @@ const cambiarEstado = async (turnoId: number, nuevoEstado: string) => {
   }
 };
 
-// Al cambiar médico o fecha, pedir de nuevo los horarios libres
+// Al cambiar profesional o fecha, pedir de nuevo los horarios libres
 watch([medicoId, fecha], obtenerHorarios);
 
-// Al cargar los médicos se elige el primero y el watch pide sus horarios
+// Al cargar los profesionales se elige el primero y el watch pide sus horarios
 onMounted(() => {
   obtenerTurnos();
   obtenerMedicos();
@@ -324,10 +331,11 @@ onMounted(() => {
       <form class="form-reserva" @submit.prevent="reservarTurno">
         <div class="fila">
           <label>
-            Médico
+            Profesional
             <select v-model.number="medicoId" required>
               <option v-for="m in medicos" :key="m.id" :value="m.id">
-                {{ m.nombre }} — {{ m.especialidad }}
+                {{ m.nombre }} ({{ etiquetaTipo(m.tipo) }}) —
+                {{ m.especialidad }}
               </option>
             </select>
           </label>
@@ -375,8 +383,8 @@ onMounted(() => {
 
           <p v-if="cargandoHorarios" class="nota">Buscando horarios…</p>
           <p v-else-if="!horarios.length" class="nota">
-            No hay horarios libres: el médico no atiende ese día o ya están
-            todos ocupados.
+            No hay horarios libres: el profesional no atiende ese día o ya
+            están todos ocupados.
           </p>
 
           <div v-else class="horarios">
@@ -420,10 +428,11 @@ onMounted(() => {
       <form class="form-reserva" @submit.prevent="insertarEntreturno">
         <div class="fila">
           <label>
-            Médico
+            Profesional
             <select v-model.number="entreMedicoId" required>
               <option v-for="m in medicos" :key="m.id" :value="m.id">
-                {{ m.nombre }} — {{ m.especialidad }}
+                {{ m.nombre }} ({{ etiquetaTipo(m.tipo) }}) —
+                {{ m.especialidad }}
               </option>
             </select>
           </label>
@@ -511,7 +520,7 @@ onMounted(() => {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Médico</th>
+              <th>Profesional</th>
               <th>Paciente</th>
               <th>Fecha y hora</th>
               <th>Estado</th>

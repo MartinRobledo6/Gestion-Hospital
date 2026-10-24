@@ -1,4 +1,5 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsString, MaxLength, MinLength } from 'class-validator';
+import { TIPOS_PROFESIONAL } from '../entities/medico.entity.js';
 
 export class CrearMedicoDto {
   @IsString()
@@ -6,8 +7,9 @@ export class CrearMedicoDto {
   @MaxLength(120)
   nombre!: string;
 
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  especialidad!: string;
+  @IsIn(TIPOS_PROFESIONAL)
+  tipo!: 'medico' | 'enfermero';
+
+  @IsInt()
+  especialidadId!: number;
 }

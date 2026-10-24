@@ -2,19 +2,21 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Between, Not, In } from 'typeorm';
 import { TurnoEntity } from './entities/turno.entity.js';
 import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
 import { PacienteEntity } from './entities/paciente.entity.js';
-import { MedicoEntity } from './entities/medico.entity.js';
+import { MedicoEntity, TipoProfesional } from './entities/medico.entity.js';
 import { ReservarTurnoDto } from './dto/reservar-turnos.dto.js';
 import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
 import { CrearHorarioDto } from './dto/crear-horarios.dto.js';
 import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
 import { CrearMedicoDto } from './dto/crear-medico.dto.js';
 import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
+import { EspecialidadEntity } from './entities/especialidad.entity.js';
 
 // Transiciones de estado permitidas para un turno
 const TRANSICIONES: Record<string, string[]> = {
@@ -37,6 +39,8 @@ export class AdmisionService {
     @InjectRepository(MedicoEntity)
     private readonly medicosRepo: Repository<MedicoEntity>,
     private readonly dataSource: DataSource,
+    @InjectRepository(EspecialidadEntity)
+    private readonly especialidadesRepo: Repository<EspecialidadEntity>,
   ) {}
 
   // ---------- Pacientes ----------
@@ -393,26 +397,56 @@ export class AdmisionService {
   // ---------- Médicos ----------
 
   // Todos los médicos cargados (para los selectores)
-  listarMedicos() {
-    return this.medicosRepo.find({ order: { nombre: 'ASC' } });
+ // tipo opcional: para filtrar solo médicos en los selectores de turnos
+async listarMedicos(tipo?: string) {
+  const profesionales = await this.medicosRepo.find({
+    where: tipo ? { tipo: tipo as TipoProfesional } : {},
+    order: { nombre: 'ASC' },
+  });
+  // aplanamos para que el frontend siga recibiendo `especialidad` como texto
+  return profesionales.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    tipo: p.tipo,
+    especialidadId: p.especialidadId,
+    especialidad: p.especialidad?.nombre ?? '',
+  }));
+}
+
+async crearMedico(dto: CrearMedicoDto) {
+  const nombre = dto.nombre.trim();
+  const especialidad = await this.especialidadesRepo.findOneBy({ id: dto.especialidadId });
+  if (!especialidad) {
+    throw new NotFoundException(`Especialidad ${dto.especialidadId} no encontrada`);
   }
 
-  async crearMedico(dto: CrearMedicoDto) {
-    const nombre = dto.nombre.trim();
-    const especialidad = dto.especialidad.trim();
-
-    const existente = await this.medicosRepo.findOneBy({
-      nombre,
-      especialidad,
-    });
-    if (existente) {
-      throw new ConflictException(
-        'Ya existe un médico con ese nombre y especialidad.',
-      );
-    }
-
-    return this.medicosRepo.save(
-      this.medicosRepo.create({ nombre, especialidad }),
+  if (especialidad.tipo !== dto.tipo) {
+    throw new BadRequestException(
+      `La especialidad "${especialidad.nombre}" no corresponde a un ${dto.tipo}.`,
     );
   }
+
+  const existente = await this.medicosRepo.findOneBy({
+    nombre,
+    tipo: dto.tipo,
+    especialidadId: especialidad.id,
+  });
+  if (existente) {
+    throw new ConflictException('Ya existe un profesional con ese nombre, tipo y especialidad.');
+  }
+
+  const guardado = await this.medicosRepo.save(
+    this.medicosRepo.create({ nombre, tipo: dto.tipo, especialidadId: especialidad.id }),
+  );
+  return {
+    id: guardado.id,
+    nombre: guardado.nombre,
+    tipo: guardado.tipo,
+    especialidadId: especialidad.id,
+    especialidad: especialidad.nombre,
+  };
+}
+  listarEspecialidades() {
+  return this.especialidadesRepo.find({ order: { nombre: 'ASC' } });
+}
 }

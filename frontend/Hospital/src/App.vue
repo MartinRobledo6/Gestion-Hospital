@@ -11,7 +11,7 @@ const enlaces = [
   { to: '/camas', texto: 'Camas' },
   { to: '/inventario', texto: 'Inventario' },
   { to: '/admision', texto: 'Admisión' },
-  { to: '/medicos', texto: 'Médicos' },
+  { to: '/Profesional', texto: 'Profesional' },
 ];
 </script>
 

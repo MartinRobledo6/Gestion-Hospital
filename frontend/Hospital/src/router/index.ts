@@ -10,7 +10,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [  
     { path: '/admision', component: AdmisionView },
-    { path: '/medicos', component: MedicosView },
+    { path: '/Profesional', component: MedicosView },
     // Vista del paciente: no aparece en el menú de admin
     {
       path: '/solicitar-turno',

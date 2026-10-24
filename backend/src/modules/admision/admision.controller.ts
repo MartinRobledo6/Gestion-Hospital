@@ -64,10 +64,10 @@ export class AdmisionController {
   eliminarHorario(@Param('id', ParseIntPipe) id: number) {
     return this.admisionService.eliminarHorario(id);
   }
-    @Get('medicos')
-  listarMedicos() {
-    return this.admisionService.listarMedicos();
-  }
+  @Get('medicos')
+listarMedicos(@Query('tipo') tipo?: string) {
+  return this.admisionService.listarMedicos(tipo);
+}
 
   @Post('turnos/solicitar')
   solicitarTurno(@Body() dto: SolicitarTurnoDto) {
@@ -83,4 +83,11 @@ crearMedico(@Body() dto: CrearMedicoDto) {
 insertarEntreturno(@Body() dto: CrearEntreturnoDto) {
   return this.admisionService.insertarEntreturno(dto);
 }
+
+@Get('especialidades')
+listarEspecialidades() {
+  return this.admisionService.listarEspecialidades();
+}
+
+
 }
