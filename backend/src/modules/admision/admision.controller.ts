@@ -2,15 +2,18 @@ import {
   Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe,
 } from '@nestjs/common';
 import { AdmisionService } from './admision.service.js';
-import { ReservarTurnoDto } from './dto/reservar-turnos.dto.js';
 import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
 import { CrearHorarioDto } from './dto/crear-horarios.dto.js';
 import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
 import { CrearMedicoDto } from './dto/crear-medico.dto.js';
 import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
+import { VincularUsuarioDto } from './dto/vincular-usuario.dto.js';
 import { Auth } from '../iam/auth.decorador.js';
 import { Rol } from '../iam/rol.enum.js';
+import * as usuarioActualDecorador from '../iam/usuario-actual.decorador.js';
 
+// Recordá: el ADMINISTRADOR pasa siempre por el RolesGuard,
+// así que @Auth(Rol.RECEPCIONISTA) significa "recepcionista o admin".
 @Controller('admision')
 export class AdmisionController {
   constructor(private readonly admisionService: AdmisionService) {}
@@ -34,26 +37,26 @@ export class AdmisionController {
     return this.admisionService.solicitarTurno(dto);
   }
 
-  // ---------- Turnos (personal) ----------
-  @Auth(Rol.RECEPCIONISTA, Rol.MEDICO)
+  // ---------- Agenda propia (médico logueado) ----------
+  @Auth(Rol.MEDICO)
+  @Get('mi-agenda')
+  miAgenda(@usuarioActualDecorador.UsuarioActual() usuario: usuarioActualDecorador.UsuarioToken) {
+    return this.admisionService.miAgenda(usuario.id);
+  }
+
+  // ---------- Turnos (recepción) ----------
+  @Auth(Rol.RECEPCIONISTA)
   @Get('turnos')
   listarTurnos() {
     return this.admisionService.listarTurnos();
   }
 
+  // Misma validación que el pedido del paciente (bloque libre y dentro del horario),
+  // pero protegido: lo usa la recepción desde AdmisionView.
   @Auth(Rol.RECEPCIONISTA)
   @Post('turnos/reservar')
-  reservarTurno(@Body() dto: ReservarTurnoDto) {
-    return this.admisionService.reservarTurno(dto);
-  }
-
-  @Auth(Rol.RECEPCIONISTA, Rol.MEDICO)
-  @Patch('turnos/:id/estado')
-  cambiarEstado(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarEstadoTurnoDto,
-  ) {
-    return this.admisionService.cambiarEstado(id, dto);
+  reservarTurno(@Body() dto: SolicitarTurnoDto) {
+    return this.admisionService.solicitarTurno(dto);
   }
 
   @Auth(Rol.RECEPCIONISTA)
@@ -62,20 +65,32 @@ export class AdmisionController {
     return this.admisionService.insertarEntreturno(dto);
   }
 
-  // ---------- Profesionales (solo admin: Rol.ADMINISTRADOR) ----------
-  @Auth(Rol.ADMINISTRADOR)
-  @Post('medicos')
-  crearMedico(@Body() dto: CrearMedicoDto) {
-    return this.admisionService.crearMedico(dto);
+  // Recepción: En Sala de Espera / Confirmado / Cancelado.
+  // Médico: Atendido, y solo en sus turnos (lo valida el service).
+  @Auth(Rol.RECEPCIONISTA, Rol.MEDICO)
+  @Patch('turnos/:id/estado')
+  cambiarEstado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CambiarEstadoTurnoDto,
+    @usuarioActualDecorador.UsuarioActual() usuario: usuarioActualDecorador.UsuarioToken,
+  ) {
+    return this.admisionService.cambiarEstado(id, dto, usuario);
   }
 
-  @Auth(Rol.ADMINISTRADOR)
+  // ---------- Horarios de atención (recepción) ----------
+  @Auth(Rol.RECEPCIONISTA)
+  @Get('profesionales')
+  listarProfesionales() {
+    return this.admisionService.listarProfesionales();
+  }
+
+  @Auth(Rol.RECEPCIONISTA)
   @Get('medicos/:id/horarios')
   listarHorarios(@Param('id', ParseIntPipe) id: number) {
     return this.admisionService.listarHorarios(id);
   }
 
-  @Auth(Rol.ADMINISTRADOR)
+  @Auth(Rol.RECEPCIONISTA)
   @Post('medicos/:id/horarios')
   crearHorario(
     @Param('id', ParseIntPipe) id: number,
@@ -84,10 +99,26 @@ export class AdmisionController {
     return this.admisionService.crearHorario(id, dto);
   }
 
-  @Auth(Rol.ADMINISTRADOR)
+  @Auth(Rol.RECEPCIONISTA)
   @Delete('medicos/horarios/:id')
   eliminarHorario(@Param('id', ParseIntPipe) id: number) {
     return this.admisionService.eliminarHorario(id);
+  }
+
+  // ---------- Profesionales (solo admin) ----------
+  @Auth(Rol.ADMINISTRADOR)
+  @Post('medicos')
+  crearMedico(@Body() dto: CrearMedicoDto) {
+    return this.admisionService.crearMedico(dto);
+  }
+
+  @Auth(Rol.ADMINISTRADOR)
+  @Patch('medicos/:id/usuario')
+  vincularUsuario(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: VincularUsuarioDto,
+  ) {
+    return this.admisionService.vincularUsuario(id, dto.usuarioId);
   }
 
   @Auth(Rol.ADMINISTRADOR)

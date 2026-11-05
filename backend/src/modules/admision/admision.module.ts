@@ -7,11 +7,13 @@ import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
 import { PacienteEntity } from './entities/paciente.entity.js';
 import { MedicoEntity } from './entities/medico.entity.js';
 import { EspecialidadEntity } from './entities/especialidad.entity.js';
-
-
+import { IamModule } from '../iam/iam.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TurnoEntity, HorarioMedicoEntity, PacienteEntity, MedicoEntity, EspecialidadEntity])],
+  imports: [
+    TypeOrmModule.forFeature([TurnoEntity, HorarioMedicoEntity, PacienteEntity, MedicoEntity, EspecialidadEntity]),
+    IamModule, // para usar UsuariosService al vincular profesionales con su cuenta
+  ],
   controllers: [AdmisionController],
   providers: [AdmisionService],
   exports: [AdmisionService],

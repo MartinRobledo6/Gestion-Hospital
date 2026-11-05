@@ -18,6 +18,10 @@ export class MedicoEntity {
   @Column({ type: 'int', nullable: true })
   especialidadId!: number | null;
 
+  
+  @Column({ type: 'int', nullable: true })
+  usuarioId!: number | null;
+
   @ManyToOne(() => EspecialidadEntity, { nullable: true, eager: true })
   @JoinColumn({ name: 'especialidadId' })
   especialidad!: EspecialidadEntity | null;

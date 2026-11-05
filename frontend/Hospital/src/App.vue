@@ -15,13 +15,15 @@ const todosLosEnlaces = [
   { to: '/usuarios', texto: 'Usuarios' },
   { to: '/admision', texto: 'Admisión' },
   { to: '/Profesional', texto: 'Profesional' },
+  { to: '/mi-agenda', texto: 'Mi agenda' },
 ];
 
 // Los permisos se leen del router (meta.roles): una sola fuente de verdad
 const enlaces = computed(() =>
-  todosLosEnlaces.filter((e) =>
-    auth.puedeEntrar(router.resolve(e.to).meta.roles),
-  ),
+  todosLosEnlaces.filter((e) => {
+    const meta = router.resolve(e.to).meta;
+    return auth.puedeEntrar(meta.roles, meta.exacto);
+  }),
 );
 
 const cerrarSesion = async () => {

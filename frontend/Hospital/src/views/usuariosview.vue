@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { apiFetch } from '../api';
 
 type Rol =
   | 'ADMINISTRADOR'
@@ -76,11 +77,8 @@ const mostrarAviso = (tipo: Aviso['tipo'], texto: string) => {
   aviso.value = { tipo, texto };
 };
 
-// Todos los pedidos de esta vista llevan el token de la sesión
-const encabezados = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('token')}`,
-});
+// apiFetch agrega el token y, si vence, manda al login
+const encabezados = () => ({ 'Content-Type': 'application/json' });
 
 // Si la respuesta no es exitosa, lanza un error con un mensaje claro
 const verificar = async (res: Response, porDefecto: string) => {
@@ -96,7 +94,7 @@ const obtenerUsuarios = async () => {
   cargando.value = true;
   error.value = null;
   try {
-    const res = await fetch(API_URL, { headers: encabezados() });
+    const res = await apiFetch(API_URL, { headers: encabezados() });
     await verificar(res, 'No se pudo obtener la lista de usuarios.');
     usuarios.value = await res.json();
   } catch (err: any) {
@@ -110,7 +108,7 @@ const crearUsuario = async () => {
   guardando.value = true;
   aviso.value = null;
   try {
-    const res = await fetch(API_URL, {
+    const res = await apiFetch(API_URL, {
       method: 'POST',
       headers: encabezados(),
       body: JSON.stringify({
@@ -141,7 +139,7 @@ const crearUsuario = async () => {
 const cambiarActivo = async (u: Usuario) => {
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/${u.id}/activo`, {
+    const res = await apiFetch(`${API_URL}/${u.id}/activo`, {
       method: 'PATCH',
       headers: encabezados(),
       body: JSON.stringify({ activo: !u.activo }),

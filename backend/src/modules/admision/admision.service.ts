@@ -3,11 +3,11 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { IsIn} from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Between, Not, In } from 'typeorm';
+import { Repository, DataSource, Between, Not, In, MoreThanOrEqual } from 'typeorm';
 import { TurnoEntity } from './entities/turno.entity.js';
 import { HorarioMedicoEntity } from './entities/Horarios-medico-entity.js';
 import { PacienteEntity } from './entities/paciente.entity.js';
@@ -18,13 +18,12 @@ import { SolicitarTurnoDto } from './dto/solicitar-turnos.dto.js';
 import { CrearMedicoDto } from './dto/crear-medico.dto.js';
 import { CrearEntreturnoDto } from './dto/crear-entreturno.dto.js';
 import { EspecialidadEntity } from './entities/especialidad.entity.js';
-import { ESTADOS, EstadosTurnos } from './estados/estados-turnos.js';
-
-
-export class CambiarEstadoTurnoDto {
-  @IsIn(EstadosTurnos)
-  nuevoEstado: string;
-}
+import { ESTADOS, EstadoTurno } from './estados/estados-turnos.js';
+import { puedeCambiarA } from './estados/permisos-estados.js';
+import { CambiarEstadoTurnoDto } from './dto/cambiar-estado-turno.dto.js';
+import { Rol } from '../iam/rol.enum.js';
+import { UsuariosService } from '../iam/usuarios.service.js';
+import { UsuarioToken } from '../iam/usuario-actual.decorador.js';
 
 @Injectable()
 export class AdmisionService {
@@ -40,6 +39,7 @@ export class AdmisionService {
     private readonly dataSource: DataSource,
     @InjectRepository(EspecialidadEntity)
     private readonly especialidadesRepo: Repository<EspecialidadEntity>,
+    private readonly usuariosService: UsuariosService,
   ) {}
   
 
@@ -61,9 +61,11 @@ export class AdmisionService {
 
   // ---------- Turnos ----------
 
-  // 0. Listar los turnos guardados, con el nombre del paciente
-  async listarTurnos() {
+  // 0. Listar los turnos guardados, con el nombre del paciente.
+  //    Si viene medicoId, solo los de ese profesional (agenda del médico).
+  async listarTurnos(medicoId?: number) {
     const turnos = await this.turnosRepo.find({
+      where: medicoId ? { medicoId } : {},
       order: { fechaHoraInicio: 'ASC' },
     });
 
@@ -208,24 +210,71 @@ export class AdmisionService {
     }
   }
 
- async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto) {
-  const turno = await this.turnosRepo.findOneBy({ id });
-  if (!turno) {
-    throw new NotFoundException(`Turno ${id} no encontrado`);
+  async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto, usuario: UsuarioToken) {
+    // 1) Permiso por rol: ¿este rol puede llevar un turno a ese estado?
+    if (!puedeCambiarA(usuario.rol, dto.nuevoEstado)) {
+      throw new ForbiddenException(
+        `Tu rol no puede pasar un turno a "${dto.nuevoEstado}".`,
+      );
+    }
+
+    const turno = await this.turnosRepo.findOneBy({ id });
+    if (!turno) {
+      throw new NotFoundException(`Turno ${id} no encontrado`);
+    }
+
+    // 2) Permiso por dueño: el médico solo modifica sus propios turnos
+    if (usuario.rol === Rol.MEDICO) {
+      const profesional = await this.profesionalDelUsuario(usuario.id);
+      if (turno.medicoId !== profesional.id) {
+        throw new ForbiddenException('Solo podés modificar tus propios turnos.');
+      }
+    }
+
+    const estadoActual = ESTADOS[turno.estado];
+    if (!estadoActual) {
+      throw new InternalServerErrorException(
+        `El turno ${id} tiene un estado desconocido: "${turno.estado}".`,
+      );
+    }
+
+    // 3) Regla de negocio: ¿la transición es válida? (patrón State)
+    const nuevoEstado = estadoActual.transicionar(dto.nuevoEstado);
+
+    turno.estado = nuevoEstado.nombre;
+    return this.turnosRepo.save(turno);
   }
 
-  const estadoActual = ESTADOS[turno.estado];
-  if (!estadoActual) {
-    throw new InternalServerErrorException(
-      `El turno ${id} tiene un estado desconocido: "${turno.estado}".`,
-    );
+  // ---------- Agenda del profesional logueado ----------
+
+  // Busca el profesional (tabla Medicos) vinculado a la cuenta logueada
+  async profesionalDelUsuario(usuarioId: number) {
+    const profesional = await this.medicosRepo.findOneBy({ usuarioId });
+    if (!profesional) {
+      throw new ForbiddenException(
+        'Tu usuario no está vinculado a ningún profesional. Pedile al administrador que lo vincule.',
+      );
+    }
+    return profesional;
   }
 
-  const nuevoEstado = estadoActual.transicionar(dto.nuevoEstado);
-
-  turno.estado = nuevoEstado.nombre;
-  return this.turnosRepo.save(turno);
-}
+  async miAgenda(usuarioId: number) {
+    const profesional = await this.profesionalDelUsuario(usuarioId);
+    const [horarios, turnos] = await Promise.all([
+      this.listarHorarios(profesional.id),
+      this.listarTurnos(profesional.id),
+    ]);
+    return {
+      profesional: {
+        id: profesional.id,
+        nombre: profesional.nombre,
+        tipo: profesional.tipo,
+        especialidad: profesional.especialidad?.nombre ?? '',
+      },
+      horarios,
+      turnos,
+    };
+  }
 
   // 4. Pedido de turno hecho por el propio paciente
   async solicitarTurno(dto: SolicitarTurnoDto) {
@@ -397,6 +446,25 @@ export class AdmisionService {
     if (!horario) {
       throw new NotFoundException(`Horario ${id} no encontrado`);
     }
+
+    // No se puede borrar un horario que tiene turnos pendientes ese día de la semana:
+    // esos turnos quedarían fuera de cualquier horario de atención.
+    const futuros = await this.turnosRepo.find({
+      where: {
+        medicoId: horario.medicoId,
+        fechaHoraInicio: MoreThanOrEqual(new Date()),
+        estado: Not(In([EstadoTurno.CANCELADO, EstadoTurno.ATENDIDO])),
+      },
+    });
+    const afectados = futuros.filter(
+      (t) => new Date(t.fechaHoraInicio).getDay() === horario.diaSemana,
+    );
+    if (afectados.length) {
+      throw new ConflictException(
+        `No se puede eliminar: hay ${afectados.length} turno(s) pendiente(s) en ese horario. Cancelalos o reprogramalos primero.`,
+      );
+    }
+
     await this.horariosRepo.remove(horario);
     return { eliminado: true };
   }
@@ -418,6 +486,61 @@ async listarMedicos(tipo?: string) {
     especialidadId: p.especialidadId,
     especialidad: p.especialidad?.nombre ?? '',
   }));
+}
+
+// Igual que listarMedicos pero con la cuenta vinculada (solo para el personal)
+async listarProfesionales() {
+  const profesionales = await this.medicosRepo.find({ order: { nombre: 'ASC' } });
+  return profesionales.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    tipo: p.tipo,
+    especialidadId: p.especialidadId,
+    especialidad: p.especialidad?.nombre ?? '',
+    usuarioId: p.usuarioId,
+  }));
+}
+
+// Valida que una cuenta pueda vincularse a un profesional:
+// que exista, que su rol coincida con el tipo y que no esté usada por otro.
+private async validarCuenta(
+  usuarioId: number,
+  tipo: TipoProfesional,
+  profesionalId?: number,
+) {
+  const usuario = await this.usuariosService.buscarPorId(usuarioId);
+  if (!usuario) {
+    throw new NotFoundException(`Usuario ${usuarioId} no encontrado`);
+  }
+
+  const rolEsperado = tipo === 'medico' ? Rol.MEDICO : Rol.ENFERMERO;
+  if (usuario.rol !== rolEsperado) {
+    throw new BadRequestException(
+      `La cuenta de ${usuario.nombre} tiene rol ${usuario.rol}; un ${tipo} necesita una cuenta con rol ${rolEsperado}.`,
+    );
+  }
+
+  const ocupado = await this.medicosRepo.findOneBy({ usuarioId });
+  if (ocupado && ocupado.id !== profesionalId) {
+    throw new ConflictException(
+      `Esa cuenta ya está vinculada a ${ocupado.nombre}.`,
+    );
+  }
+}
+
+async vincularUsuario(profesionalId: number, usuarioId: number | null) {
+  const profesional = await this.medicosRepo.findOneBy({ id: profesionalId });
+  if (!profesional) {
+    throw new NotFoundException(`Profesional ${profesionalId} no encontrado`);
+  }
+
+  if (usuarioId != null) {
+    await this.validarCuenta(usuarioId, profesional.tipo, profesional.id);
+  }
+
+  profesional.usuarioId = usuarioId ?? null;
+  await this.medicosRepo.save(profesional);
+  return { id: profesional.id, usuarioId: profesional.usuarioId };
 }
 
 async crearMedico(dto: CrearMedicoDto) {
@@ -442,8 +565,17 @@ async crearMedico(dto: CrearMedicoDto) {
     throw new ConflictException('Ya existe un profesional con ese nombre, tipo y especialidad.');
   }
 
+  if (dto.usuarioId != null) {
+    await this.validarCuenta(dto.usuarioId, dto.tipo);
+  }
+
   const guardado = await this.medicosRepo.save(
-    this.medicosRepo.create({ nombre, tipo: dto.tipo, especialidadId: especialidad.id }),
+    this.medicosRepo.create({
+      nombre,
+      tipo: dto.tipo,
+      especialidadId: especialidad.id,
+      usuarioId: dto.usuarioId ?? null,
+    }),
   );
   return {
     id: guardado.id,
@@ -451,6 +583,7 @@ async crearMedico(dto: CrearMedicoDto) {
     tipo: guardado.tipo,
     especialidadId: especialidad.id,
     especialidad: especialidad.nombre,
+    usuarioId: guardado.usuarioId,
   };
 }
   listarEspecialidades() {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { apiFetch } from '../api';
+import { useAuthStore } from '../stores/auth';
 
 // ---------- Tipos ----------
 type TipoProfesional = 'medico' | 'enfermero';
@@ -25,6 +26,16 @@ interface Medico {
   tipo: TipoProfesional;
   especialidadId: number | null;
   especialidad: string;
+  usuarioId: number | null; // cuenta con la que inicia sesión
+}
+
+// Cuenta de la tabla Usuarios (la lista solo la puede pedir el admin)
+interface Cuenta {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  activo: boolean;
 }
 
 interface Especialidad {
@@ -34,6 +45,12 @@ interface Especialidad {
 }
 
 const API_URL = 'http://localhost:3000/admision';
+const USUARIOS_URL = 'http://localhost:3000/usuarios';
+
+// Recepción entra a esta vista solo para los horarios;
+// el alta de profesionales y el vínculo con su cuenta son del admin
+const auth = useAuthStore();
+const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR');
 
 const DIAS = [
   'Domingo',
@@ -64,7 +81,13 @@ const aviso = ref<Aviso | null>(null);
 const nuevoNombre = ref('');
 const nuevoTipo = ref<TipoProfesional>('medico');
 const nuevaEspecialidadId = ref<number | null>(null);
+const nuevoUsuarioId = ref<number | null>(null);
 const guardandoMedico = ref(false);
+
+// Cuentas de usuario y vínculo del profesional seleccionado
+const cuentas = ref<Cuenta[]>([]);
+const cuentaElegida = ref<number | null>(null);
+const vinculando = ref(false);
 
 // Formulario de nuevo horario
 const diaSemana = ref<number>(1);
@@ -107,6 +130,28 @@ const especialidadesFiltradas = computed(() =>
   especialidades.value.filter((e) => e.tipo === nuevoTipo.value),
 );
 
+// Rol de cuenta que corresponde a cada tipo de profesional
+const rolDeTipo = (t: TipoProfesional) => (t === 'medico' ? 'MEDICO' : 'ENFERMERO');
+
+// Cuentas que se pueden vincular: rol correcto, activas y no usadas por otro profesional
+const cuentasPara = (tipo: TipoProfesional, profesionalId: number | null) =>
+  cuentas.value.filter(
+    (c) =>
+      c.activo &&
+      c.rol === rolDeTipo(tipo) &&
+      !medicos.value.some((m) => m.usuarioId === c.id && m.id !== profesionalId),
+  );
+
+const cuentasAlta = computed(() => cuentasPara(nuevoTipo.value, null));
+const cuentasActual = computed(() =>
+  medicoActual.value ? cuentasPara(medicoActual.value.tipo, medicoActual.value.id) : [],
+);
+
+const nombreCuenta = (id: number | null) => {
+  const c = cuentas.value.find((x) => x.id === id);
+  return c ? `${c.nombre} (${c.email})` : 'Sin cuenta vinculada';
+};
+
 const previsualizacion = computed(() => {
   const total = aMinutos(horaFin.value) - aMinutos(horaInicio.value);
   if (!intervalo.value || total <= 0) return null;
@@ -132,7 +177,8 @@ const mostrarAviso = (tipo: Aviso['tipo'], texto: string) => {
 // ---------- Llamadas al backend ----------
 const obtenerMedicos = async () => {
   try {
-    const res = await apiFetch(`${API_URL}/medicos`);
+    // /profesionales (y no /medicos, que es público) porque trae la cuenta vinculada
+    const res = await apiFetch(`${API_URL}/profesionales`);
     if (!res.ok) {
       throw new Error(
         await leerError(res, 'No se pudo obtener la lista de profesionales.'),
@@ -164,6 +210,46 @@ const obtenerEspecialidades = async () => {
   }
 };
 
+const obtenerCuentas = async () => {
+  try {
+    const res = await apiFetch(USUARIOS_URL);
+    if (!res.ok) {
+      throw new Error(await leerError(res, 'No se pudieron obtener las cuentas.'));
+    }
+    cuentas.value = await res.json();
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  }
+};
+
+const vincularCuenta = async () => {
+  if (!medicoActual.value) return;
+  vinculando.value = true;
+  aviso.value = null;
+  try {
+    const res = await apiFetch(`${API_URL}/medicos/${medicoActual.value.id}/usuario`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuarioId: cuentaElegida.value }),
+    });
+    if (!res.ok) {
+      throw new Error(await leerError(res, 'No se pudo vincular la cuenta.'));
+    }
+    await obtenerMedicos();
+    await nextTick();
+    mostrarAviso(
+      'ok',
+      cuentaElegida.value
+        ? `Cuenta vinculada a ${medicoActual.value?.nombre}.`
+        : `Se quitó la cuenta de ${medicoActual.value?.nombre}.`,
+    );
+  } catch (err: any) {
+    mostrarAviso('error', err.message);
+  } finally {
+    vinculando.value = false;
+  }
+};
+
 const agregarMedico = async () => {
   guardandoMedico.value = true;
   aviso.value = null;
@@ -175,6 +261,8 @@ const agregarMedico = async () => {
         nombre: nuevoNombre.value,
         tipo: nuevoTipo.value,
         especialidadId: nuevaEspecialidadId.value,
+        // undefined no viaja en el JSON: si no se eligió cuenta, no se manda
+        usuarioId: nuevoUsuarioId.value ?? undefined,
       }),
     });
 
@@ -184,6 +272,7 @@ const agregarMedico = async () => {
 
     const creado: Medico = await res.json();
     nuevoNombre.value = '';
+    nuevoUsuarioId.value = null;
 
     await obtenerMedicos();
     medicoId.value = creado.id; // queda seleccionado para cargarle los horarios
@@ -285,6 +374,16 @@ watch(medicoId, () => {
   obtenerHorarios();
 });
 
+// El select de vínculo arranca con la cuenta actual del profesional
+watch(medicoActual, (m) => {
+  cuentaElegida.value = m?.usuarioId ?? null;
+});
+
+// Si cambia el tipo (médico/enfermero), la cuenta elegida puede dejar de servir
+watch(cuentasAlta, (lista) => {
+  if (!lista.some((c) => c.id === nuevoUsuarioId.value)) nuevoUsuarioId.value = null;
+});
+
 // Si el día elegido ya tiene horario, pasar al primer día libre
 watch(diasLibres, (lista) => {
   const primero = lista[0];
@@ -303,7 +402,11 @@ watch(especialidadesFiltradas, (lista) => {
 
 onMounted(() => {
   obtenerMedicos();
-  obtenerEspecialidades();
+  // Estos endpoints son solo del admin: la recepción no los pide
+  if (esAdmin.value) {
+    obtenerEspecialidades();
+    obtenerCuentas();
+  }
 });
 </script>
 
@@ -311,15 +414,17 @@ onMounted(() => {
   <main class="vista">
     <header class="encabezado">
       <h1>Médicos y Horarios</h1>
-      <p class="subtitulo">Alta de profesionales y horarios de atención</p>
+      <p class="subtitulo">
+        {{ esAdmin ? 'Alta de profesionales y horarios de atención' : 'Horarios de atención de los profesionales' }}
+      </p>
     </header>
 
     <p v-if="aviso" :class="['aviso', aviso.tipo]" role="status">
       {{ aviso.texto }}
     </p>
 
-    <!-- Alta de profesional -->
-    <section class="tarjeta">
+    <!-- Alta de profesional (solo admin) -->
+    <section v-if="esAdmin" class="tarjeta">
       <h2>Nuevo Profesional</h2>
 
       <form class="form" @submit.prevent="agregarMedico">
@@ -358,6 +463,16 @@ onMounted(() => {
             </select>
           </label>
 
+          <label>
+            Cuenta de acceso
+            <select v-model="nuevoUsuarioId">
+              <option :value="null">Sin cuenta por ahora</option>
+              <option v-for="c in cuentasAlta" :key="c.id" :value="c.id">
+                {{ c.nombre }} ({{ c.email }})
+              </option>
+            </select>
+          </label>
+
           <button
             type="submit"
             class="btn btn-primario"
@@ -372,7 +487,8 @@ onMounted(() => {
     <!-- Selector de profesional -->
     <section class="tarjeta">
       <p v-if="!medicos.length" class="nota">
-        Todavía no hay profesionales cargados. Agregá el primero arriba.
+        Todavía no hay profesionales cargados.
+        {{ esAdmin ? 'Agregá el primero arriba.' : 'Pedile al administrador que los cargue.' }}
       </p>
 
       <label v-else class="campo-medico">
@@ -383,6 +499,35 @@ onMounted(() => {
           </option>
         </select>
       </label>
+    </section>
+
+    <!-- Cuenta de acceso del profesional (solo admin) -->
+    <section v-if="esAdmin && medicoActual" class="tarjeta">
+      <h2>Cuenta de acceso de {{ medicoActual.nombre }}</h2>
+      <p class="nota">
+        Actual: <strong>{{ nombreCuenta(medicoActual.usuarioId) }}</strong>.
+        Con esta cuenta el profesional ve su agenda y marca sus turnos como atendidos.
+      </p>
+      <form class="form" @submit.prevent="vincularCuenta">
+        <div class="fila">
+          <label>
+            Cuenta ({{ etiquetaTipo(medicoActual.tipo) }})
+            <select v-model="cuentaElegida">
+              <option :value="null">Sin cuenta</option>
+              <option v-for="c in cuentasActual" :key="c.id" :value="c.id">
+                {{ c.nombre }} ({{ c.email }})
+              </option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            class="btn btn-primario"
+            :disabled="vinculando || cuentaElegida === medicoActual.usuarioId"
+          >
+            {{ vinculando ? 'Guardando…' : 'Guardar vínculo' }}
+          </button>
+        </div>
+      </form>
     </section>
 
     <!-- Horarios cargados -->

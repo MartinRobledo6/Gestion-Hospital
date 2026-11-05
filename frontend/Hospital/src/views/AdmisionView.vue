@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { apiFetch } from '../api';
+import { useAuthStore } from '../stores/auth';
+import { accionesPara } from '../permisos';
 
 // ---------- Tipos ----------
 type TipoProfesional = 'medico' | 'enfermero';
@@ -69,14 +71,11 @@ const entreNombre = ref('');
 const entreEmail = ref('');
 const insertandoEntre = ref(false);
 
-// Transiciones de estado permitidas
-const transiciones: Record<string, string[]> = {
-  Programado: ['Confirmado', 'Cancelado'],
-  Confirmado: ['En Sala de Espera', 'Cancelado'],
-  'En Sala de Espera': ['Atendido', 'Cancelado'],
-  Atendido: [],
-  Cancelado: [],
-};
+const auth = useAuthStore();
+
+// Botones de estado según la transición válida Y el rol logueado
+// (la recepción no ve "Atendido": eso lo marca el médico)
+const acciones = (estado: string) => accionesPara(auth.rol, estado);
 
 // ---------- Formato ----------
 const formatearFecha = (iso: string) => new Date(iso).toLocaleString('es-AR');
@@ -208,7 +207,7 @@ const reservarTurno = async () => {
   reservando.value = true;
   aviso.value = null;
   try {
-    const res = await apiFetch(`${API_URL}/turnos/solicitar`, {
+    const res = await apiFetch(`${API_URL}/turnos/reservar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -561,7 +560,7 @@ onMounted(() => {
               </td>
               <td class="acciones">
                 <button
-                  v-for="siguiente in transiciones[turno.estado] ?? []"
+                  v-for="siguiente in acciones(turno.estado)"
                   :key="siguiente"
                   class="btn btn-accion"
                   :class="{ peligro: siguiente === 'Cancelado' }"
@@ -570,7 +569,7 @@ onMounted(() => {
                   {{ siguiente }}
                 </button>
                 <span
-                  v-if="!(transiciones[turno.estado] ?? []).length"
+                  v-if="!acciones(turno.estado).length"
                   class="nota"
                 >
                   —

@@ -6,7 +6,7 @@ import type { LoginResponse, Rol, Usuario } from '../type/auth';
 export const HOME_POR_ROL: Record<Rol, string> = {
   ADMINISTRADOR: '/usuarios',
   RECEPCIONISTA: '/admision',
-  MEDICO: '/admision',
+  MEDICO: '/mi-agenda',
   ENFERMERO: '/inicio', // cambiar cuando exista su módulo
   PACIENTE: '/solicitar-turno',
 };
@@ -56,7 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   // roles undefined = cualquier usuario logueado; el admin entra siempre
-  const puedeEntrar = (roles?: Rol[]) => {
+  const puedeEntrar = (roles?: Rol[], exacto?: unknown) => {
     if (!rol.value) return false;
     if (!roles || roles.length === 0) return true;
     return rol.value === 'ADMINISTRADOR' || roles.includes(rol.value);

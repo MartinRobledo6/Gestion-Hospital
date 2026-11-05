@@ -8,12 +8,14 @@ import SolicitarTurnoView from '../views/SolicitarTurnoView.vue';
 import LoginView from '../views/loginview.vue';
 import InicioView from '../views/inicioview.vue';
 import UsuariosView from '../views/usuariosview.vue';
+import MiAgendaView from '../views/MiAgendaView.vue';
 
 // Tipamos el meta para que TypeScript te avise si escribís mal un rol
 declare module 'vue-router' {
   interface RouteMeta {
     publica?: boolean;
     roles?: Rol[];
+    exacto?: boolean; // true = el admin NO entra por defecto
   }
 }
 
@@ -37,10 +39,12 @@ const router = createRouter({
     // Sin roles = cualquier usuario logueado
     { path: '/inicio', component: InicioView },
 
-    // Con roles = solo esos (el admin entra siempre)
+    // Con roles = solo esos (el admin entra siempre, salvo exacto: true)
     { path: '/usuarios', component: UsuariosView, meta: { roles: ['ADMINISTRADOR'] } },
-    { path: '/admision', component: AdmisionView, meta: { roles: ['RECEPCIONISTA', 'MEDICO'] } },
-    { path: '/Profesional', component: MedicosView, meta: { roles: ['ADMINISTRADOR'] } },
+    { path: '/admision', component: AdmisionView, meta: { roles: ['RECEPCIONISTA'] } },
+    // Recepción carga horarios; el alta de profesionales dentro de la vista es solo para admin
+    { path: '/Profesional', component: MedicosView, meta: { roles: ['RECEPCIONISTA'] } },
+    { path: '/mi-agenda', component: MiAgendaView, meta: { roles: ['MEDICO'], exacto: true } },
 
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -59,7 +63,7 @@ router.beforeEach((to) => {
     return { path: '/login', query: { redirect: to.fullPath } };
   }
 
-  if (!auth.puedeEntrar(to.meta.roles)) {
+  if (!auth.puedeEntrar(to.meta.roles, to.meta.exacto)) {
     return { path: '/inicio', query: { sinPermiso: '1' } };
   }
 

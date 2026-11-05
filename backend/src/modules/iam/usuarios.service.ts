@@ -64,6 +64,10 @@ export class UsuariosService implements OnModuleInit {
     });
   }
 
+  buscarPorId(id: number) {
+    return this.repo.findOne({ where: { id } });
+  }
+
   buscarPorEmail(email: string) {
     return this.repo.findOne({ where: { email } });
   }

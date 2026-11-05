@@ -1,6 +1,7 @@
-import { IsString } from 'class-validator';
+import { IsIn } from 'class-validator';
+import { EstadosTurnos } from '../estados/estados-turnos.js';
 
 export class CambiarEstadoTurnoDto {
-  @IsString()
+  @IsIn(EstadosTurnos, { message: 'El estado indicado no existe' })
   nuevoEstado: string;
 }
