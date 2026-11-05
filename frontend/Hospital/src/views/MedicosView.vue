@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { apiFetch } from '../api';
 
 // ---------- Tipos ----------
 type TipoProfesional = 'medico' | 'enfermero';
@@ -131,7 +132,7 @@ const mostrarAviso = (tipo: Aviso['tipo'], texto: string) => {
 // ---------- Llamadas al backend ----------
 const obtenerMedicos = async () => {
   try {
-    const res = await fetch(`${API_URL}/medicos`);
+    const res = await apiFetch(`${API_URL}/medicos`);
     if (!res.ok) {
       throw new Error(
         await leerError(res, 'No se pudo obtener la lista de profesionales.'),
@@ -150,7 +151,7 @@ const obtenerMedicos = async () => {
 
 const obtenerEspecialidades = async () => {
   try {
-    const res = await fetch(`${API_URL}/especialidades`);
+    const res = await apiFetch(`${API_URL}/especialidades`);
     if (!res.ok) {
       throw new Error(
         await leerError(res, 'No se pudieron obtener las especialidades.'),
@@ -167,7 +168,7 @@ const agregarMedico = async () => {
   guardandoMedico.value = true;
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/medicos`, {
+    const res = await apiFetch(`${API_URL}/medicos`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -205,7 +206,7 @@ const obtenerHorarios = async () => {
 
   cargando.value = true;
   try {
-    const res = await fetch(`${API_URL}/medicos/${medicoId.value}/horarios`);
+    const res = await apiFetch(`${API_URL}/medicos/${medicoId.value}/horarios`);
     if (!res.ok) {
       throw new Error(
         await leerError(res, 'No se pudieron obtener los horarios.'),
@@ -226,7 +227,7 @@ const agregarHorario = async () => {
   guardando.value = true;
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/medicos/${medicoId.value}/horarios`, {
+    const res = await apiFetch(`${API_URL}/medicos/${medicoId.value}/horarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -265,7 +266,7 @@ const eliminarHorario = async (h: Horario) => {
 
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/medicos/horarios/${h.id}`, {
+    const res = await apiFetch(`${API_URL}/medicos/horarios/${h.id}`, {
       method: 'DELETE',
     });
     if (!res.ok) {

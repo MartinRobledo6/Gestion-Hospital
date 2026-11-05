@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
+import { apiFetch } from '../api';
 
 // ---------- Tipos ----------
 type TipoProfesional = 'medico' | 'enfermero';
@@ -142,7 +143,7 @@ const obtenerTurnos = async () => {
   cargando.value = true;
   error.value = null;
   try {
-    const res = await fetch(`${API_URL}/turnos`);
+    const res = await apiFetch(`${API_URL}/turnos`);
     if (!res.ok) throw new Error('No se pudo obtener la lista de turnos.');
     turnos.value = await res.json();
   } catch (err: any) {
@@ -154,7 +155,7 @@ const obtenerTurnos = async () => {
 
 const obtenerMedicos = async () => {
   try {
-    const res = await fetch(`${API_URL}/medicos`);
+    const res = await apiFetch(`${API_URL}/medicos`);
     if (!res.ok) throw new Error('No se pudo obtener la lista de profesionales.');
     medicos.value = await res.json();
 
@@ -184,7 +185,7 @@ const obtenerHorarios = async () => {
       medicoId: String(medicoId.value),
       fecha: fecha.value,
     });
-    const res = await fetch(`${API_URL}/turnos/disponibles?${params}`);
+    const res = await apiFetch(`${API_URL}/turnos/disponibles?${params}`);
     if (!res.ok) {
       throw new Error(
         await leerError(res, 'No se pudieron obtener los horarios.'),
@@ -207,7 +208,7 @@ const reservarTurno = async () => {
   reservando.value = true;
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/turnos/solicitar`, {
+    const res = await apiFetch(`${API_URL}/turnos/solicitar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -249,7 +250,7 @@ const insertarEntreturno = async () => {
     };
     if (entreDuracion.value) body.duracionMinutos = entreDuracion.value;
 
-    const res = await fetch(`${API_URL}/turnos/entreturno`, {
+    const res = await apiFetch(`${API_URL}/turnos/entreturno`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -277,7 +278,7 @@ const insertarEntreturno = async () => {
 const cambiarEstado = async (turnoId: number, nuevoEstado: string) => {
   aviso.value = null;
   try {
-    const res = await fetch(`${API_URL}/turnos/${turnoId}/estado`, {
+    const res = await apiFetch(`${API_URL}/turnos/${turnoId}/estado`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nuevoEstado }),

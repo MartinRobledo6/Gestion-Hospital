@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
+import type { LoginResponse } from '../type/auth';
 
 const API_URL = 'http://localhost:3000/auth';
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 
 const email = ref('');
 const password = ref('');
@@ -38,13 +41,15 @@ const iniciarSesion = async () => {
       throw new Error(await leerError(res, 'No se pudo iniciar sesión.'));
     }
 
-    const data = await res.json();
-    localStorage.setItem('token', data.access_token);
-    localStorage.setItem('usuario', JSON.stringify(data.usuario));
+    const data: LoginResponse = await res.json();
 
-    // Si el router lo mandó acá desde otra página, vuelve a esa página
+    // El store guarda en memoria y en localStorage
+    auth.guardarSesion(data);
+
+    // Si el router lo mandó acá desde otra página, vuelve a esa página;
+    // si no, va al home de su rol
     const destino =
-      typeof route.query.redirect === 'string' ? route.query.redirect : '/';
+      typeof route.query.redirect === 'string' ? route.query.redirect : auth.home;
     await router.push(destino);
   } catch (err: any) {
     error.value =

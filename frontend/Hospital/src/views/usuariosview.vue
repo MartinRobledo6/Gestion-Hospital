@@ -28,7 +28,6 @@ const roles: Rol[] = [
   'MEDICO',
   'ENFERMERO',
   'RECEPCIONISTA',
-  'PACIENTE',
 ];
 
 const etiquetaRol: Record<Rol, string> = {

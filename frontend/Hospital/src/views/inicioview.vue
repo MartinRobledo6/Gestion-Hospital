@@ -8,7 +8,6 @@ const route = useRoute();
 const sinPermiso = computed(() => route.query.sinPermiso === '1');
 
 const etiquetaRol: Record<string, string> = {
-  ADMINISTRADOR: 'Administrador',
   MEDICO: 'Médico',
   ENFERMERO: 'Enfermero',
   RECEPCIONISTA: 'Recepcionista',

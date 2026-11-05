@@ -1,25 +1,40 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from './stores/auth';
 
 const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
 
-// Las rutas con meta.publica (ej: solicitar turno) no muestran el menú de admin
 const esPublica = computed(() => route.meta.publica === true);
 
-const enlaces = [
-  { to: '/camas', texto: 'Camas' },
-  { to: '/inventario', texto: 'Inventario' },
+// Camas e Inventario no están: agregalos cuando mergeen esos módulos,
+// con su ruta (y meta.roles) en el router
+const todosLosEnlaces = [
+  { to: '/usuarios', texto: 'Usuarios' },
   { to: '/admision', texto: 'Admisión' },
   { to: '/Profesional', texto: 'Profesional' },
 ];
+
+// Los permisos se leen del router (meta.roles): una sola fuente de verdad
+const enlaces = computed(() =>
+  todosLosEnlaces.filter((e) =>
+    auth.puedeEntrar(router.resolve(e.to).meta.roles),
+  ),
+);
+
+const cerrarSesion = async () => {
+  auth.logout();
+  await router.push('/login');
+};
 </script>
 
 <template>
   <div class="app">
     <header class="barra">
       <div class="barra-interior">
-        <RouterLink :to="esPublica ? '/solicitar-turno' : '/camas'" class="marca">
+        <RouterLink :to="esPublica ? '/solicitar-turno' : auth.home" class="marca">
           <span class="logo" aria-hidden="true">🏥</span>
           Gestión Hospitalaria
         </RouterLink>
@@ -34,6 +49,13 @@ const enlaces = [
             {{ e.texto }}
           </RouterLink>
         </nav>
+
+        <div v-if="!esPublica && auth.usuario" class="sesion">
+          <span class="usuario">{{ auth.usuario.nombre }}</span>
+          <button type="button" class="salir" @click="cerrarSesion">
+            Salir
+          </button>
+        </div>
       </div>
     </header>
 
@@ -129,8 +151,39 @@ body {
   color: var(--azul);
 }
 
+/* Sesión */
+.sesion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.usuario {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--suave);
+  white-space: nowrap;
+}
+
+.salir {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.salir:hover {
+  background: #f1f5f9;
+}
+
 .marca:focus-visible,
-.enlace:focus-visible {
+.enlace:focus-visible,
+.salir:focus-visible {
   outline: 2px solid var(--azul);
   outline-offset: 2px;
 }

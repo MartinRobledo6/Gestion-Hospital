@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -7,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { UsuarioEntity } from '../Entity/usuario.entity.js';
+import { UsuarioEntity } from './Entity/usuario.entity.js';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto.js';
 import { Rol } from './rol.enum.js';
 
@@ -70,6 +71,9 @@ export class UsuariosService implements OnModuleInit {
   async cambiarActivo(id: number, activo: boolean) {
     const usuario = await this.repo.findOne({ where: { id } });
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
+    if (usuario.rol === Rol.ADMINISTRADOR && !activo) {
+      throw new ForbiddenException('No se puede desactivar al administrador');
+    }
     usuario.activo = activo;
     await this.repo.save(usuario);
     return { id, activo };
