@@ -9,6 +9,7 @@ import LoginView from '../views/loginview.vue';
 import InicioView from '../views/inicioview.vue';
 import UsuariosView from '../views/usuariosview.vue';
 import MiAgendaView from '../views/MiAgendaView.vue';
+import GuardiaView from '../views/GuardiaView.vue';
 
 // Tipamos el meta para que TypeScript te avise si escribís mal un rol
 declare module 'vue-router' {
@@ -47,6 +48,8 @@ const router = createRouter({
     { path: '/mi-agenda', component: MiAgendaView, meta: { roles: ['MEDICO'], exacto: true } },
 
     { path: '/:pathMatch(.*)*', redirect: '/' },
+        { path: '/mi-agenda', component: MiAgendaView, meta: { roles: ['MEDICO'], exacto: true } },
+    { path: '/guardia', component: GuardiaView, meta: { roles: ['ENFERMERO', 'MEDICO'] } },
   ],
 });
 

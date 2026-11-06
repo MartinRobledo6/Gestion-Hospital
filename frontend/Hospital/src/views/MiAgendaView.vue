@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { apiFetch } from '../api';
 import { useAuthStore } from '../stores/auth';
 import { accionesPara } from '../permisos';
+import { usePolling } from '../composable/usepolling';
 
 // ---------- Tipos ----------
 interface Turno {
@@ -37,6 +38,7 @@ interface Aviso {
 type Filtro = 'dia' | 'proximos' | 'todos';
 
 const API_URL = 'http://localhost:3000/admision';
+const INTERVALO_MS = 15_000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 const auth = useAuthStore();
@@ -46,6 +48,7 @@ const agenda = ref<Agenda | null>(null);
 const cargando = ref(false);
 const error = ref<string | null>(null);
 const aviso = ref<Aviso | null>(null);
+const llegadas = ref<string[]>([]); // pacientes que llegaron desde la última vez que miraste
 
 const hoy = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 const filtro = ref<Filtro>('dia');
@@ -58,7 +61,7 @@ const claseEstado = (estado: string) => estado.toLowerCase().replace(/ /g, '-');
 const minutosTurno = (t: Turno) =>
   Math.round((new Date(t.fechaHoraFin).getTime() - new Date(t.fechaHoraInicio).getTime()) / 60000);
 
-// Solo las acciones del médico (hoy: "Atendido" cuando el turno está Confirmado)
+// Solo las acciones del médico: "Atendido" cuando el turno está En Sala de Espera
 const acciones = (estado: string) => accionesPara(auth.rol, estado);
 
 // ---------- Datos derivados ----------
@@ -83,8 +86,25 @@ const turnosFiltrados = computed(() => {
 
 // Pacientes que ya llegaron y esperan ser atendidos
 const enEspera = computed(
-  () => (agenda.value?.turnos ?? []).filter((t) => t.estado === 'Confirmado').length,
+  () => (agenda.value?.turnos ?? []).filter((t) => t.estado === 'En Sala de Espera').length,
 );
+
+// ---------- Notificación de llegada (HU 2.1) ----------
+// Se compara qué turnos estaban "En Sala de Espera" en la consulta anterior
+// contra la actual: los que aparecen nuevos son pacientes que recién llegaron.
+let idsEnSalaAnterior: Set<number> | null = null; // null = primera carga, no avisar
+
+const detectarLlegadas = (turnos: Turno[]) => {
+  const enSala = turnos.filter((t) => t.estado === 'En Sala de Espera');
+  if (idsEnSalaAnterior) {
+    const anteriores = idsEnSalaAnterior;
+    const nuevos = enSala.filter((t) => !anteriores.has(t.id));
+    if (nuevos.length) {
+      llegadas.value = [...nuevos.map((t) => t.pacienteNombre ?? 'Paciente'), ...llegadas.value];
+    }
+  }
+  idsEnSalaAnterior = new Set(enSala.map((t) => t.id));
+};
 
 // ---------- Mensajes ----------
 const leerError = async (res: Response, porDefecto: string) => {
@@ -97,13 +117,16 @@ const leerError = async (res: Response, porDefecto: string) => {
 };
 
 // ---------- Llamadas al backend ----------
-const obtenerAgenda = async () => {
-  cargando.value = true;
-  error.value = null;
+// silencioso = true en el refresco automático, para que el botón no parpadee
+const obtenerAgenda = async (silencioso = false) => {
+  if (!silencioso) cargando.value = true;
   try {
     const res = await apiFetch(`${API_URL}/mi-agenda`);
     if (!res.ok) throw new Error(await leerError(res, 'No se pudo obtener tu agenda.'));
-    agenda.value = await res.json();
+    const data: Agenda = await res.json();
+    detectarLlegadas(data.turnos);
+    agenda.value = data;
+    error.value = null;
   } catch (err: any) {
     error.value = err.message;
   } finally {
@@ -130,8 +153,10 @@ const cambiarEstado = async (turno: Turno, nuevoEstado: string) => {
   }
 };
 
-onMounted(obtenerAgenda);
+// Primera carga con indicador; las siguientes, silenciosas
+usePolling(() => obtenerAgenda(agenda.value !== null), INTERVALO_MS);
 </script>
+
 
 <template>
   <main class="vista">
@@ -142,7 +167,7 @@ onMounted(obtenerAgenda);
           {{ agenda.profesional.nombre }} · {{ agenda.profesional.especialidad }}
         </p>
       </div>
-      <button class="btn btn-secundario" :disabled="cargando" @click="obtenerAgenda">
+      <button class="btn btn-secundario" :disabled="cargando" @click="obtenerAgenda()">
         {{ cargando ? 'Actualizando…' : 'Actualizar' }}
       </button>
     </header>
@@ -150,12 +175,21 @@ onMounted(obtenerAgenda);
     <p v-if="error" class="aviso error" role="alert">{{ error }}</p>
     <p v-if="aviso" :class="['aviso', aviso.tipo]" role="status">{{ aviso.texto }}</p>
 
+    <!-- Aviso de llegada: un paciente pasó a "En Sala de Espera" (HU 2.1) -->
+    <div v-if="llegadas.length" class="alerta-llegada" role="alert">
+      <span>
+        🔔 <strong>{{ llegadas.join(', ') }}</strong>
+        {{ llegadas.length === 1 ? 'llegó y está' : 'llegaron y están' }} en sala de espera.
+      </span>
+      <button class="btn btn-secundario" @click="llegadas = []">Entendido</button>
+    </div>
+
     <template v-if="agenda">
       <!-- Turnos -->
       <section class="tarjeta">
         <h2>
           Mis turnos
-          <span v-if="enEspera" class="badge confirmado">{{ enEspera }} esperando atención</span>
+          <span v-if="enEspera" class="badge en-sala-de-espera">{{ enEspera }} esperando atención</span>
         </h2>
 
         <div class="fila">
@@ -483,6 +517,20 @@ button:disabled {
   background: #fef2f2;
   border-color: #fecaca;
   color: #991b1b;
+}
+
+/* Aviso de llegada de paciente */
+.alerta-llegada {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .nota {

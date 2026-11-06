@@ -16,6 +16,7 @@ const todosLosEnlaces = [
   { to: '/admision', texto: 'Admisión' },
   { to: '/Profesional', texto: 'Profesional' },
   { to: '/mi-agenda', texto: 'Mi agenda' },
+  { to: '/guardia', texto: 'Guardia' },
 ];
 
 // Los permisos se leen del router (meta.roles): una sola fuente de verdad

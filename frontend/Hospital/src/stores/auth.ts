@@ -7,7 +7,7 @@ export const HOME_POR_ROL: Record<Rol, string> = {
   ADMINISTRADOR: '/usuarios',
   RECEPCIONISTA: '/admision',
   MEDICO: '/mi-agenda',
-  ENFERMERO: '/inicio', // cambiar cuando exista su módulo
+  ENFERMERO: '/guardia',
   PACIENTE: '/solicitar-turno',
 };
 
