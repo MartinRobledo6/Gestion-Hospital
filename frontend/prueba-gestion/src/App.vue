@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import enfermeriaView from './modules/enfermeria/enfermeriaView.vue';
+import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <enfermeriaView />
+  <RouterView />
 </template>

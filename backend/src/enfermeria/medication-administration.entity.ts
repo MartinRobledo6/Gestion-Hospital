@@ -14,6 +14,10 @@ export class MedicationAdministration {
   @CreateDateColumn({ type: 'datetime', name: 'FechaHoraAplicacion' })
   administeredAt: Date;
 
+  /** Horario de la dosis programada que se está confirmando (p. ej. las 14:00). */
+  @Column({ type: 'datetime', name: 'FechaHoraProgramada', nullable: true })
+  scheduledAt: Date | null;
+
   @Column({ type: 'varchar', length: 50, name: 'Estado' })
   status: string;
 }

@@ -29,6 +29,10 @@ export class VitalSigns {
   @Column({ default: false })
   isCriticalAlert: boolean; // Se marca true si la temperatura > 39°C
 
+  // Nota de enfermería automática (HU 1.1). Nullable para no romper registros ya guardados.
+  @Column({ type: 'nvarchar', length: 500, nullable: true })
+  nursingNote: string | null;
+
   @CreateDateColumn()
   recordedAt: Date;
 }

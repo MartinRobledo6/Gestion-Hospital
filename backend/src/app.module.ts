@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EnfermeriaModule } from './enfermeria/enfermeria.module';
-import { VitalSigns } from './enfermeria/vital-signs.entity';
-import { MedicationAdministration } from './enfermeria/medication-administration.entity';
 
 @Module({
   imports: [
@@ -13,8 +11,13 @@ import { MedicationAdministration } from './enfermeria/medication-administration
       username: 'sa',     // Reemplaza por tu usuario
       password: 'nacho123', // Reemplaza por tu contraseña
       database: 'GestionHospital',
-      entities: [VitalSigns, MedicationAdministration],
-      synchronize: false, // Mantenlo en false porque ya creaste las tablas por script
+      // Las entidades se registran solas desde cada módulo (TypeOrmModule.forFeature),
+      // así no hay que agregarlas a mano acá cada vez que se crea una.
+      autoLoadEntities: true,
+      // true: TypeORM crea/actualiza las tablas a partir de las entidades al arrancar.
+      // Sirve para desarrollo y para el TP; NO usar en una base real (puede borrar columnas).
+      // La base GestionHospital tiene que existir (vacía alcanza).
+      synchronize: true,
       options: {
         encrypt: false,
         trustServerCertificate: true,

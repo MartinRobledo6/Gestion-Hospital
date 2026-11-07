@@ -1,122 +1,170 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue'
+import { RouterLink, RouterView } from 'vue-router'
+import NurseSession from './components/NurseSession.vue'
+import { useEnfermeriaStore } from './useEnfermeriaStore'
 
-// 1. Definición de tipos acorde al módulo de enfermería
-interface SignosVitales {
-  id: number;
-  pacienteId: number;
-  temperatura: number;
-  presionArterial: string;
-  pulso: number;
-  saturacionOxigeno: number;
-  fechaRegistro: string;
-}
+// Esta vista es el "marco" del módulo: cabecera, navegación y avisos.
+// Cada pestaña es una ruta hija que se dibuja en <RouterView />.
+const store = useEnfermeriaStore()
 
-// Estados reactivos
-const registros = ref<SignosVitales[]>([]);
-const cargando = ref(false);
-const errorMensaje = ref('');
-
-// URL base del backend
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-// 2. Llamada GET directa para obtener los signos vitales
-const obtenerSignosVitales = async () => {
-  cargando.value = true;
-  errorMensaje.value = '';
-
-  try {
-    const response = await fetch(`${API_URL}/enfermeria/signos-vitales`);
-
-    if (!response.ok) {
-      throw new Error(`Error al obtener los registros (${response.status})`);
-    }
-
-    registros.value = await response.json();
-  } catch (error: any) {
-    errorMensaje.value = error.message || 'Ocurrió un error inesperado';
-    console.error(error);
-  } finally {
-    cargando.value = false;
-  }
-};
-
-// 3. Llamada POST directa para registrar nuevos signos vitales o una administración
-const registrarSignos = async (nuevoRegistro: Omit<SignosVitales, 'id' | 'fechaRegistro'>) => {
-  try {
-    const response = await fetch(`${API_URL}/enfermeria/signos-vitales`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(nuevoRegistro),
-    });
-
-    if (!response.ok) {
-      throw new Error('No se pudo guardar el registro de enfermería');
-    }
-
-    const data = await response.json();
-    registros.value.unshift(data); // Añadimos el nuevo registro al inicio de la lista
-  } catch (error: any) {
-    console.error(error);
-    alert(error.message);
-  }
-};
-
+let timer: number | undefined
 onMounted(() => {
-  obtenerSignosVitales();
-});
+  store.cargarTodo()
+  // Los avisos al médico llegan "solos": consultamos cada 15 s mientras la pantalla está abierta.
+  timer = window.setInterval(() => store.refrescarAvisos(), 15_000)
+})
+onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template>
-  <div class="enfermeria-view">
-    <h2>Módulo de Enfermería - Control de Signos Vitales</h2>
+  <div class="shell">
+    <header class="top">
+      <div class="top-inner">
+        <h1>Atención y Enfermería</h1>
+        <NurseSession />
+      </div>
+      <nav class="tabs" aria-label="Secciones de enfermería">
+        <RouterLink to="/enfermeria/signos-vitales">Signos vitales</RouterLink>
+        <RouterLink to="/enfermeria/medicacion">Medicación</RouterLink>
+        <RouterLink to="/enfermeria/alertas">
+          Alertas al médico
+          <span v-if="store.sinLeer" class="count" aria-label="sin leer">{{ store.sinLeer }}</span>
+        </RouterLink>
+        <RouterLink to="/enfermeria/protocolos">Protocolos de ingreso</RouterLink>
+      </nav>
+    </header>
 
-    <p v-if="cargando">Cargando registros...</p>
-    <p v-if="errorMensaje" class="error">{{ errorMensaje }}</p>
+    <main class="content">
+      <div
+        v-if="store.aviso"
+        class="notice"
+        :class="`notice-${store.aviso.tipo}`"
+        :role="store.aviso.tipo === 'exito' ? 'status' : 'alert'"
+      >
+        <p>{{ store.aviso.texto }}</p>
+        <button type="button" class="btn btn-quiet" @click="store.limpiarAviso">Cerrar</button>
+      </div>
 
-    <div v-if="!cargando && registros.length > 0">
-      <table>
-        <thead>
-          <tr>
-            <th>ID Paciente</th>
-            <th>Temperatura</th>
-            <th>Presión Arterial</th>
-            <th>Pulso</th>
-            <th>SpO2</th>
-            <th>Fecha / Hora</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="reg in registros" :key="reg.id">
-            <td>{{ reg.pacienteId }}</td>
-            <td>{{ reg.temperatura }} °C</td>
-            <td>{{ reg.presionArterial }}</td>
-            <td>{{ reg.pulso }} lpm</td>
-            <td>{{ reg.saturacionOxigeno }}%</td>
-            <td>{{ reg.fechaRegistro }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <div v-if="store.errorCarga" class="notice notice-error" role="alert">
+        <p>{{ store.errorCarga }}</p>
+        <button type="button" class="btn btn-quiet" @click="store.cargarTodo">Reintentar</button>
+      </div>
 
-    <p v-else-if="!cargando">No hay registros de signos vitales cargados.</p>
+      <RouterView />
+    </main>
   </div>
 </template>
 
 <style scoped>
-.error {
-  color: red;
+.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
+
+.top-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
 }
-th, td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
+
+h1 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.tabs {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+}
+
+.tabs a {
+  padding: 0.6rem 0.9rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.count {
+  display: inline-block;
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  margin-left: 0.25rem;
+  border-radius: 999px;
+  background: var(--critical);
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.tabs a:hover {
+  color: var(--ink);
+}
+
+.tabs a.router-link-active {
+  color: var(--brand-dark);
+  border-bottom-color: var(--brand);
+}
+
+.content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.notice p {
+  font-weight: 600;
+}
+
+.notice-exito {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.notice-alerta {
+  background: var(--critical);
+  border-color: var(--critical);
+  color: #fff;
+}
+
+.notice-alerta .btn-quiet {
+  color: #fff;
+  border-color: #fff;
+}
+
+.notice-alerta .btn-quiet:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.notice-error {
+  background: var(--critical-soft);
+  border-color: var(--critical);
+  color: var(--critical);
 }
 </style>

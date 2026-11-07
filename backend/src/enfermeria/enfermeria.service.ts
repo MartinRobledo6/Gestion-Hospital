@@ -1,52 +1,66 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { VitalSigns } from './vital-signs.entity';
-import { MedicationAdministration } from './medication-administration.entity'; // 1. Importar la entidad
+import { Notificacion } from './notificacion.entity';
 import { CreateVitalSignsDto } from './dto/create-vital-signs.dto';
-import { CreateMedicationAdministrationDto } from './dto/create-medication-administration.dto'; // (Asegúrate de crear este DTO)
-import { Repository, DeepPartial } from 'typeorm';
+import {
+  buildCriticalMessage,
+  buildNursingNote,
+  isCriticalTemperature,
+} from './rules/vital-signs.rules';
 
+// Signos vitales (HU 1.1). La medicación (HU 1.2) está en MedicacionService
+// y los protocolos de ingreso (HU 2.1) en ProtocolosService.
 @Injectable()
 export class EnfermeriaService {
   constructor(
     @InjectRepository(VitalSigns)
     private readonly vitalSignsRepository: Repository<VitalSigns>,
-
-    // 2. Inyectar el repositorio de administración de medicamentos
-    @InjectRepository(MedicationAdministration)
-    private readonly medicationAdminRepository: Repository<MedicationAdministration>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  // --- MÉTODOS DE SIGNOS VITALES (Ya los tienes) ---
   async registerVitalSigns(dto: CreateVitalSignsDto): Promise<VitalSigns> {
-    const isCriticalAlert = dto.temperature > 39;
+    const isCriticalAlert = isCriticalTemperature(dto.temperature);
+    const nursingNote = buildNursingNote(dto.temperature, isCriticalAlert);
 
-    const vitalRecord = this.vitalSignsRepository.create({
-      ...dto,
-      isCriticalAlert,
+    // El control y el aviso al médico se guardan juntos: si falla uno, no queda el otro.
+    return this.dataSource.transaction(async (manager) => {
+      // Se copian los campos uno por uno (en vez de ...dto) para que el cliente no pueda
+      // mandar por su cuenta cosas como id, isCriticalAlert o recordedAt.
+      const record = await manager.save(
+        manager.create(VitalSigns, {
+          patientId: dto.patientId,
+          nurseName: dto.nurseName,
+          roomNumber: dto.roomNumber,
+          bloodPressureSystolic: dto.bloodPressureSystolic,
+          bloodPressureDiastolic: dto.bloodPressureDiastolic,
+          heartRate: dto.heartRate,
+          temperature: dto.temperature,
+          isCriticalAlert,
+          nursingNote,
+        }),
+      );
+
+      if (isCriticalAlert) {
+        await manager.save(
+          manager.create(Notificacion, {
+            priority: 'ALTA',
+            recipientRole: 'MEDICO_GUARDIA',
+            message: buildCriticalMessage(dto.temperature, dto.patientId, dto.roomNumber),
+            referenceId: record.id,
+            read: false,
+          }),
+        );
+      }
+
+      return record;
     });
-
-    return this.vitalSignsRepository.save(vitalRecord);
   }
 
   async getAllVitalSigns(): Promise<VitalSigns[]> {
     return await this.vitalSignsRepository.find({
       order: { recordedAt: 'DESC' },
-    });
-  }
-
-  // --- 3. MÉTODOS NUEVOS DE ADMINISTRACIÓN DE MEDICAMENTOS ---
-  async registerMedicationAdministration(dto: CreateMedicationAdministrationDto): Promise<MedicationAdministration> {
-    const medicationAdmin = this.medicationAdminRepository.create({
-      ...dto,
-    });
-
-    return await this.medicationAdminRepository.save(medicationAdmin);
-  }
-
-  async getAllMedicationAdministrations(): Promise<MedicationAdministration[]> {
-    return await this.medicationAdminRepository.find({
-      order: { administeredAt: 'DESC' },
     });
   }
 }
