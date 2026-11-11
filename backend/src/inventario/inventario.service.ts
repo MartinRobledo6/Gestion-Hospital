@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateInventarioDto } from './dto/create-inventario.dto.js';
 import { UpdateInventarioDto } from './dto/update-inventario.dto.js';
 import { Inventario } from './entities/inventario.entity.js';
 import { OnEvent } from '@nestjs/event-emitter';
+import { esViolacionForeignKey } from '../common/db-errors.js';
 
 @Injectable()
 export class InventarioService {
@@ -34,9 +35,21 @@ export class InventarioService {
     return await this.inventarioRepository.save(recursoAntiguo);
   }
 
+  async reponer(id: number, cantidad: number) {
+    const result = await this.inventarioRepository.increment({ Id: id }, 'StockActual', cantidad);
+    if (!result.affected) throw new NotFoundException('Recurso no encontrado');
+    return await this.findOne(id);
+  }
+
   async remove(id: number) {
     const recurso = await this.findOne(id);
-    return await this.inventarioRepository.remove(recurso);
+    try{
+      return await this.inventarioRepository.remove(recurso);
+    } catch (error) {
+      if (esViolacionForeignKey(error)) {
+        throw new ConflictException('No se puede eliminar el recurso porque está siendo referenciado por otros registros.');
+      }
+    }
   }
 
   @OnEvent('insumo.administrado', { async: true })
@@ -53,11 +66,18 @@ export class InventarioService {
           .execute();
 
           if (result.affected === 0) {
-            console.error(`No se pudo descontar el stock. Puede que el insumo no exista o que no haya suficiente stock.`);
-          }
-          else {
-            console.log(`Stock descontado exitosamente para el insumo ID ${payload.insumoId}.`);
-          }
+        console.error(
+          `No se pudo descontar ${payload.cantidad} u. del insumo ID ${payload.insumoId}: no existe o no hay suficiente stock.`,
+        );
+        return;
+      }
+      console.log(`Stock descontado exitosamente para el insumo ID ${payload.insumoId}.`);
+      const insumo = await this.inventarioRepository.findOne({ where: { Id: payload.insumoId } });
+      if (insumo && insumo.StockActual <= insumo.StockMinimo) {
+        console.warn(
+          `ALERTA STOCK BAJO: "${insumo.Nombre}" quedó en ${insumo.StockActual} u. (mínimo: ${insumo.StockMinimo}).`,
+        );
+      }
       } catch (error) {
         console.error(`Error al descontar el stock del insumo ID ${payload.insumoId}:`, error);
       }

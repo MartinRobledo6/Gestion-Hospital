@@ -4,3 +4,10 @@ export function esViolacionUnique(e: unknown): boolean {
   const num = err?.driverError?.number ?? err?.number;
   return num === 2601 || num === 2627;
 }
+
+// Errores 547 de SQL Server = violación de constraint de clave foránea
+export function esViolacionForeignKey(e: unknown): boolean {
+  const err = e as { number?: number; driverError?: { number?: number } };
+  const num = err?.driverError?.number ?? err?.number;
+  return num === 547;
+}

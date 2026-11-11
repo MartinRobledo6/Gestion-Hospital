@@ -4,6 +4,7 @@ import { Observable, fromEvent, map } from 'rxjs';
 import { CamasService } from './camas.service.js';
 import { AsignarCamaDto } from './dto/asignar-cama.dto.js';
 import { NumeroCamaDto } from './dto/numero-cama.dto.js';
+import { TrasladarCamaDto } from './dto/trasladar-cama.dto.js';
 
 @Controller('camas')
 export class CamasController {
@@ -20,6 +21,11 @@ export class CamasController {
   @Post('liberar')
   liberar(@Body() body: NumeroCamaDto) {
     return this.camasService.liberarCama(body.numero);
+  }
+
+  @Post('trasladar')
+  trasladar(@Body() body: TrasladarCamaDto) {
+    return this.camasService.trasladarCama(body.numeroOrigen, body.numeroDestino);
   }
 
   @Post('limpiar')
