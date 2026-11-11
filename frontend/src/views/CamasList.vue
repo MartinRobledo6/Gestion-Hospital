@@ -181,7 +181,6 @@ const procesarAccion = async (endpoint: string, numero: string, extraData = {}) 
   }
 }
 
-// Ojo acá: El pacienteId 1 asume que ya creaste el paciente Ignacio Mullasano
 const asignar = (numero: string) => procesarAccion('asignar', numero, { pacienteId: 1 })
 const liberar = (numero: string) => procesarAccion('liberar', numero)
 const limpiar = (numero: string) => procesarAccion('limpiar', numero)
