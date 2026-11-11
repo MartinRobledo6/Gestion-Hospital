@@ -1,14 +1,16 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HistoriaClinica } from './entities/historia-clinica.entity.js';
 import { EvolucionMedica } from './entities/evolucion-medica.entity.js';
 import { Paciente } from './entities/paciente.entity.js';
 import { EstudioMedico } from './entities/estudio-medico.entity.js';
+import { Usuario } from './entities/usuario.entity.js';
 import { CrearHistoriaClinicaDto } from './dto/crear-historia-clinica.dto.js';
 import { CrearEvolucionDto } from './dto/crear-evolucion.dto.js';
 import { ActualizarHistoriaClinicaDto } from './dto/actualizar-historia-clinica.dto.js';
 import { CrearEstudioDto } from './dto/crear-estudio.dto.js';
+import { esViolacionUnique } from '../common/db-errors.js';
 
 @Injectable()
 export class HceService {
@@ -24,6 +26,9 @@ export class HceService {
 
     @InjectRepository(EstudioMedico)
     private estudioRepository: Repository<EstudioMedico>,
+
+    @InjectRepository(Usuario)
+    private usuarioRepository: Repository<Usuario>,
   ) {}
 
   // 1. Abrir la Ficha Demográfica (Se ejecuta una sola vez por paciente)
@@ -43,7 +48,15 @@ export class HceService {
     }
 
     const nuevaHc = this.historiaClinicaRepository.create(dto);
-    return await this.historiaClinicaRepository.save(nuevaHc);
+    try {
+      return await this.historiaClinicaRepository.save(nuevaHc);
+    } catch (e) {
+      // Dos pedidos simultáneos pasan el findOne de arriba; el UNIQUE de PacienteId frena al segundo
+      if (esViolacionUnique(e)) {
+        throw new ConflictException(`El paciente ${dto.PacienteId} ya tiene una historia clínica abierta en el sistema.`);
+      }
+      throw e;
+    }
   }
 
   // 2. Cargar una Evolución Médica (INMUTABLE: No programamos DELETE ni PATCH)
@@ -55,10 +68,29 @@ export class HceService {
     if (!historia) {
       throw new NotFoundException('Historia clínica no encontrada.');
     }
-
+    
+    const medico = await this.usuarioRepository.findOne({
+      where: { id: dto.MedicoId },
+      relations: { rol: true },
+    });
+    if (!medico) {
+      throw new NotFoundException(`El médico ${dto.MedicoId} no existe.`);
+    }
+    if (medico.rol.nombre !== 'Médico') {
+      throw new BadRequestException(
+        `El usuario ${dto.MedicoId} no tiene rol de Médico, no puede registrar evoluciones.`,
+      );
+    }
     const nuevaEvolucion = this.evolucionRepository.create(dto);
     
     return await this.evolucionRepository.save(nuevaEvolucion);
+  }
+
+  async listarPacientes(){
+    return await this.pacienteRepository.find({
+      select: { Id: true, Nombre: true, Apellido: true, Documento: true },
+      order: { Apellido: 'ASC', Nombre: 'ASC' },
+    });
   }
 
   // 3. Visualización centralizada para el médico

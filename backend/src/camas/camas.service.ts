@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, IsNull, Repository } from 'typeorm';
 import { Cama, EstadoCama } from './entities/cama.entity.js';
 import { AsignacionCama } from './entities/asignacion-cama.entity.js';
+import { Paciente } from '../hce/entities/paciente.entity.js';
 import { OperacionCama, siguienteEstado } from './estados/cama-state.js';
 import { esViolacionUnique } from '../common/db-errors.js';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -48,8 +49,31 @@ export class CamasService {
     return this.transicionar(numero, 'desbloquear', undefined, 'Cama desbloqueada, está libre');
   }
 
-  obtenerCamas() {
-    return this.camasRepository.find({ order: { Numero: 'ASC' } });
+    // Lista las camas y, si están ocupadas, el paciente de la asignación activa (FechaEgreso NULL)
+  async obtenerCamas() {
+    const filas = await this.camasRepository
+      .createQueryBuilder('c')
+      .leftJoin(AsignacionCama, 'a', 'a.CamaId = c.Id AND a.FechaEgreso IS NULL')
+      .leftJoin(Paciente, 'p', 'p.Id = a.PacienteId')
+      .select('c.Id', 'Id')
+      .addSelect('c.Numero', 'Numero')
+      .addSelect('c.Estado', 'Estado')
+      .addSelect('c.Version', 'Version')
+      .addSelect('p.Id', 'PacienteId')
+      .addSelect('p.Nombre', 'PacienteNombre')
+      .addSelect('p.Apellido', 'PacienteApellido')
+      .orderBy('c.Numero', 'ASC')
+      .getRawMany();
+
+    return filas.map((f) => ({
+      Id: f.Id,
+      Numero: f.Numero,
+      Estado: f.Estado,
+      Version: f.Version,
+      Paciente: f.PacienteId
+        ? { Id: f.PacienteId, Nombre: f.PacienteNombre, Apellido: f.PacienteApellido }
+        : null,
+    }));
   }
 
   /**

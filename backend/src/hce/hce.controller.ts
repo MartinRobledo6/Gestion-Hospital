@@ -21,6 +21,12 @@ export class HceController {
     return this.hceService.agregarEvolucion(dto);
   }
 
+    // GET: http://localhost:3000/hce/pacientes
+  @Get('pacientes')
+  listarPacientes() {
+    return this.hceService.listarPacientes();
+  }
+
   // GET: http://localhost:3000/hce/paciente/1
   @Get('paciente/:id')
   obtenerHistoriaCompleta(@Param('id', ParseIntPipe) pacienteId: number) {
