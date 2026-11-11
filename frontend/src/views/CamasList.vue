@@ -5,12 +5,30 @@
       <p class="subtitle">Monitoreo y asignación de camas hospitalarias</p>
     </header>
 
+    <!-- Traslado: se elige la cama de destino entre las libres -->
+    <div v-if="camaOrigenTraslado" class="card traslado-card">
+      <h3>Trasladar paciente de la cama {{ camaOrigenTraslado }}</h3>
+      <label for="destino">Cama de destino (solo libres)</label>
+      <select id="destino" v-model="destinoTraslado" class="select-destino">
+        <option value="" disabled>Elegí una cama</option>
+        <option v-for="libre in camasLibres" :key="libre.Id" :value="libre.Numero">
+          {{ libre.Numero }}
+        </option>
+      </select>
+      <button class="btn btn-primary" :disabled="!destinoTraslado" @click="confirmarTraslado">
+        Confirmar traslado
+      </button>
+      <button class="btn btn-secondary" @click="cancelarTraslado">Cancelar</button>
+      <p v-if="camasLibres.length === 0" class="aviso-traslado">No hay camas libres disponibles.</p>
+    </div>
+
     <div class="card table-card">
       <table class="hospital-table">
         <thead>
           <tr>
             <th>ID</th>
             <th>Número de Cama</th>
+            <th>Paciente</th>
             <th>Estado</th>
             <th>Versión</th>
             <th class="text-center">Acciones</th>
@@ -22,6 +40,8 @@
               <span class="badge-id">#{{ cama.Id }}</span>
             </td>
             <td class="fw-bold">{{ cama.Numero }}</td>
+            <td :class="{ 'sin-paciente': !cama.Paciente }">{{ nombrePaciente(cama) }}</td>
+            <td>v{{ cama.Version }}</td>
             <td>
               <span :class="['status-badge', getStatusClass(cama.Estado)]">
                 {{ cama.Estado.toUpperCase() }}
@@ -43,6 +63,15 @@
                 class="btn btn-success"
               >
                 Dar de Alta
+              </button>
+
+              <button
+                v-if="cama.Estado.toLowerCase() === 'ocupadas'"
+                @click="iniciarTraslado(cama.Numero)"
+                class="btn btn-primary"
+                style="margin-left: 5px"
+              >
+                Trasladar
               </button>
 
               <button
@@ -85,16 +114,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+
+interface PacienteCama {
+  Id: number
+  Nombre: string
+  Apellido: string
+}
 
 interface Cama {
   Id: number
   Numero: string
   Estado: string
   Version: number
+  Paciente?: PacienteCama | null
 }
 
 const camas = ref<Cama[]>([])
+const camaOrigenTraslado = ref<string | null>(null)
+const destinoTraslado = ref('')
+const camasLibres = computed(() => camas.value.filter((c) => c.Estado.toLowerCase() === 'libres'))
 
 // Función auxiliar para asignar el color correcto a la píldora de estado
 const getStatusClass = (estado: string) => {
@@ -105,6 +144,9 @@ const getStatusClass = (estado: string) => {
   if (est === 'bloqueadas') return 'status-locked'
   return ''
 }
+
+const nombrePaciente = (cama: Cama) =>
+  cama.Paciente ? `${cama.Paciente.Apellido}, ${cama.Paciente.Nombre}` : '—'
 
 const fetchCamas = async () => {
   try {
@@ -144,6 +186,42 @@ const asignar = (numero: string) => procesarAccion('asignar', numero, { paciente
 const liberar = (numero: string) => procesarAccion('liberar', numero)
 const limpiar = (numero: string) => procesarAccion('limpiar', numero)
 const desbloquear = (numero: string) => procesarAccion('desbloquear', numero)
+
+const iniciarTraslado = (numero: string) => {
+  camaOrigenTraslado.value = numero
+  destinoTraslado.value = ''
+}
+
+const cancelarTraslado = () => {
+  camaOrigenTraslado.value = null
+  destinoTraslado.value = ''
+}
+
+const confirmarTraslado = async () => {
+  if (!camaOrigenTraslado.value || !destinoTraslado.value) return
+  try {
+    const response = await fetch('http://localhost:3000/camas/trasladar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numeroOrigen: camaOrigenTraslado.value,
+        numeroDestino: destinoTraslado.value,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.message || 'Error desconocido en el servidor')
+    }
+    cancelarTraslado()
+    await fetchCamas()
+  } catch (error) {
+    alert(
+      `No se pudo trasladar al paciente:\n${error instanceof Error ? error.message : 'Error desconocido'}`,
+    )
+    console.error('Detalle del error:', error)
+  }
+}
 
 let eventos: EventSource | null = null
 onMounted(() => {
@@ -300,6 +378,50 @@ onUnmounted(() => eventos?.close())
   background-color: #dc2626;
 }
 
+.btn-secondary {
+  background-color: #64748b;
+  color: white;
+  margin-left: 5px;
+}
+.btn-secondary:hover {
+  background-color: #475569;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.traslado-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: var(--med-blue);
+}
+
+.traslado-card label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.select-destino {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  margin: 0 0.75rem 0.5rem 0;
+  min-width: 200px;
+}
+
+.aviso-traslado {
+  margin: 0.5rem 0 0 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Badges e Indicadores visuales */
 .badge-id {
   background-color: #e2e8f0;
@@ -333,6 +455,10 @@ onUnmounted(() => eventos?.close())
 .status-locked {
   background-color: var(--locked-bg);
   color: var(--locked-text);
+}
+
+.sin-paciente {
+  color: var(--text-muted);
 }
 
 .empty-state {

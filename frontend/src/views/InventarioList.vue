@@ -24,6 +24,16 @@
           />
         </div>
         <div class="input-group">
+          <label>Stock Mínimo (alerta)</label>
+          <input
+            v-model.number="nuevoInsumo.StockMinimo"
+            type="number"
+            placeholder="0"
+            required
+            min="0"
+          />
+        </div>
+        <div class="input-group">
           <label>Precio Unitario ($)</label>
           <input
             v-model.number="nuevoInsumo.PrecioUnitario"
@@ -47,6 +57,7 @@
             <th>ID</th>
             <th>Descripción del Insumo</th>
             <th>Stock Actual</th>
+            <th>Stock Mínimo</th>
             <th>Precio Unitario</th>
             <th class="text-center">Acción</th>
           </tr>
@@ -59,14 +70,35 @@
             <td class="fw-bold">{{ insumo.Nombre }}</td>
             <td>
               <span
-                :class="['status-badge', insumo.StockActual > 10 ? 'status-ok' : 'status-warning']"
+                :class="[
+                  'status-badge',
+                  insumo.StockActual > insumo.StockMinimo ? 'status-ok' : 'status-warning',
+                ]"
               >
                 {{ insumo.StockActual }} u.
+                <template v-if="insumo.StockActual <= insumo.StockMinimo"> · STOCK BAJO</template>
               </span>
             </td>
+            <td>{{ insumo.StockMinimo }} u.</td>
             <td>$ {{ insumo.PrecioUnitario }}</td>
             <td class="text-center">
-              <button @click="eliminarInsumo(insumo.Id)" class="btn btn-danger">Eliminar</button>
+              <div class="reposicion">
+                <input
+                  v-model.number="cantidadesReposicion[insumo.Id]"
+                  type="number"
+                  min="1"
+                  class="input-reponer"
+                  placeholder="Cant."
+                />
+                <button
+                  @click="reponerInsumo(insumo.Id)"
+                  :disabled="!cantidadesReposicion[insumo.Id]"
+                  class="btn btn-success"
+                >
+                  Reponer
+                </button>
+                <button @click="eliminarInsumo(insumo.Id)" class="btn btn-danger">Eliminar</button>
+              </div>
             </td>
           </tr>
           <tr v-if="insumos.length === 0">
@@ -85,6 +117,7 @@ interface Insumo {
   Id: number
   Nombre: string
   StockActual: number
+  StockMinimo: number
   PrecioUnitario: number
 }
 
@@ -92,8 +125,12 @@ const insumos = ref<Insumo[]>([])
 const nuevoInsumo = ref({
   Nombre: '',
   StockActual: 0,
+  StockMinimo: 0,
   PrecioUnitario: 0,
 })
+
+// Cantidad a reponer por insumo (clave: Id del insumo)
+const cantidadesReposicion = ref<Record<number, number | null>>({})
 
 const fetchInsumos = async () => {
   try {
@@ -115,11 +152,36 @@ const crearInsumo = async () => {
 
     if (!response.ok) throw new Error('No se pudo crear el insumo')
 
-    nuevoInsumo.value = { Nombre: '', StockActual: 0, PrecioUnitario: 0 }
+    nuevoInsumo.value = { Nombre: '', StockActual: 0, StockMinimo: 0, PrecioUnitario: 0 }
     await fetchInsumos()
   } catch (error) {
     console.error('Error al crear:', error)
     alert('Ocurrió un error al registrar el insumo.')
+  }
+}
+
+const reponerInsumo = async (id: number) => {
+  const cantidad = cantidadesReposicion.value[id]
+  if (!cantidad || cantidad < 1) return
+  try {
+    const response = await fetch(`http://localhost:3000/inventario/${id}/reponer`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cantidad }),
+    })
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(
+        Array.isArray(errorData.message) ? errorData.message.join('\n') : errorData.message,
+      )
+    }
+    cantidadesReposicion.value[id] = null
+    await fetchInsumos()
+  } catch (error) {
+    alert(
+      `No se pudo reponer el stock:\n${error instanceof Error ? error.message : 'Error desconocido'}`,
+    )
+    console.error('Error al reponer:', error)
   }
 }
 
@@ -129,9 +191,17 @@ const eliminarInsumo = async (id: number) => {
     const response = await fetch(`http://localhost:3000/inventario/${id}`, {
       method: 'DELETE',
     })
-    if (!response.ok) throw new Error('No se pudo eliminar')
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(
+        Array.isArray(errorData.message) ? errorData.message.join('\n') : errorData.message,
+      )
+    }
     await fetchInsumos()
   } catch (error) {
+    alert(
+      `No se pudo eliminar el insumo:\n${error instanceof Error ? error.message : 'Error desconocido'}`,
+    )
     console.error('Error al eliminar:', error)
   }
 }
@@ -203,7 +273,6 @@ onMounted(() => {
   padding-bottom: 0.5rem;
 }
 
-/* Formulario Moderno */
 .grid-form {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr auto;
@@ -253,6 +322,14 @@ input:focus {
 
 .btn-primary:hover {
   background-color: var(--med-blue-hover);
+}
+
+.btn-success {
+  background-color: #10b981;
+  color: white;
+}
+.btn-success:hover:not(:disabled) {
+  background-color: #059669;
 }
 
 .btn-danger {
@@ -337,6 +414,21 @@ input:focus {
 .status-warning {
   background-color: var(--warning-bg);
   color: var(--warning-text);
+}
+
+.reposicion {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.input-reponer {
+  width: 80px;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.85rem;
 }
 
 .empty-state {
