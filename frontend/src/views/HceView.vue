@@ -171,6 +171,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { API_URL } from '../config'
 
 interface Cobertura {
   Nombre: string
@@ -209,7 +210,7 @@ interface Historia {
   Evoluciones: Evolucion[]
 }
 
-const API = 'http://localhost:3000/hce'
+const API = `${API_URL}/hce`
 
 const pacienteIdBusqueda = ref<number | null>(null)
 const historia = ref<Historia | null>(null)

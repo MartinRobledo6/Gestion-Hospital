@@ -5,6 +5,27 @@
       <p class="subtitle">Monitoreo y asignación de camas hospitalarias</p>
     </header>
 
+    <!-- Asignación: se elige el paciente en vez de mandar un ID fijo -->
+    <div v-if="camaAsignar" class="card traslado-card">
+      <h3>Asignar la cama {{ camaAsignar }}</h3>
+      <label for="paciente">Paciente</label>
+      <select id="paciente" v-model="pacienteSeleccionado" class="select-destino">
+        <option :value="null" disabled>Elegí un paciente</option>
+        <option v-for="p in pacientes" :key="p.Id" :value="p.Id">
+          {{ p.Apellido }}, {{ p.Nombre }} (DNI {{ p.Documento }})
+        </option>
+      </select>
+      <button
+        class="btn btn-primary"
+        :disabled="!pacienteSeleccionado"
+        @click="confirmarAsignacion"
+      >
+        Confirmar asignación
+      </button>
+      <button class="btn btn-secondary" @click="cancelarAsignacion">Cancelar</button>
+      <p v-if="pacientes.length === 0" class="aviso-traslado">No hay pacientes cargados.</p>
+    </div>
+
     <!-- Traslado: se elige la cama de destino entre las libres -->
     <div v-if="camaOrigenTraslado" class="card traslado-card">
       <h3>Trasladar paciente de la cama {{ camaOrigenTraslado }}</h3>
@@ -28,8 +49,8 @@
           <tr>
             <th>ID</th>
             <th>Número de Cama</th>
-            <th>Paciente</th>
             <th>Estado</th>
+            <th>Paciente</th>
             <th>Versión</th>
             <th class="text-center">Acciones</th>
           </tr>
@@ -40,18 +61,17 @@
               <span class="badge-id">#{{ cama.Id }}</span>
             </td>
             <td class="fw-bold">{{ cama.Numero }}</td>
-            <td :class="{ 'sin-paciente': !cama.Paciente }">{{ nombrePaciente(cama) }}</td>
-            <td>v{{ cama.Version }}</td>
             <td>
               <span :class="['status-badge', getStatusClass(cama.Estado)]">
                 {{ cama.Estado.toUpperCase() }}
               </span>
             </td>
+            <td :class="{ 'sin-paciente': !cama.Paciente }">{{ nombrePaciente(cama) }}</td>
             <td>v{{ cama.Version }}</td>
             <td class="text-center">
               <button
                 v-if="cama.Estado.toLowerCase() === 'libres'"
-                @click="asignar(cama.Numero)"
+                @click="iniciarAsignacion(cama.Numero)"
                 class="btn btn-primary"
               >
                 Asignar
@@ -94,7 +114,11 @@
               </button>
 
               <button
-                v-if="cama.Estado.toLowerCase() === 'libres'"
+                v-if="
+                  cama.Estado.toLowerCase() === 'libres' ||
+                  cama.Estado.toLowerCase() === 'en limpieza' ||
+                  cama.Estado.toLowerCase() === 'en_limpieza'
+                "
                 @click="procesarAccion('bloquear', cama.Numero)"
                 class="btn btn-danger"
                 style="margin-left: 5px"
@@ -105,7 +129,7 @@
           </tr>
 
           <tr v-if="camas.length === 0">
-            <td colspan="5" class="empty-state">No hay camas registradas en el sistema.</td>
+            <td colspan="6" class="empty-state">No hay camas registradas en el sistema.</td>
           </tr>
         </tbody>
       </table>
@@ -115,6 +139,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { API_URL } from '../config'
 
 interface PacienteCama {
   Id: number
@@ -131,6 +156,16 @@ interface Cama {
 }
 
 const camas = ref<Cama[]>([])
+
+interface PacienteOpcion {
+  Id: number
+  Nombre: string
+  Apellido: string
+  Documento: string
+}
+const pacientes = ref<PacienteOpcion[]>([])
+const camaAsignar = ref<string | null>(null)
+const pacienteSeleccionado = ref<number | null>(null)
 const camaOrigenTraslado = ref<string | null>(null)
 const destinoTraslado = ref('')
 const camasLibres = computed(() => camas.value.filter((c) => c.Estado.toLowerCase() === 'libres'))
@@ -150,7 +185,7 @@ const nombrePaciente = (cama: Cama) =>
 
 const fetchCamas = async () => {
   try {
-    const response = await fetch('http://localhost:3000/camas/listado')
+    const response = await fetch(`${API_URL}/camas/listado`)
     if (!response.ok) throw new Error('Error al obtener las camas')
     camas.value = await response.json()
   } catch (error) {
@@ -160,7 +195,7 @@ const fetchCamas = async () => {
 
 const procesarAccion = async (endpoint: string, numero: string, extraData = {}) => {
   try {
-    const response = await fetch(`http://localhost:3000/camas/${endpoint}`, {
+    const response = await fetch(`${API_URL}/camas/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ numero, ...extraData }),
@@ -181,12 +216,39 @@ const procesarAccion = async (endpoint: string, numero: string, extraData = {}) 
   }
 }
 
-const asignar = (numero: string) => procesarAccion('asignar', numero, { pacienteId: 1 })
+const fetchPacientes = async () => {
+  try {
+    const response = await fetch(`${API_URL}/hce/pacientes`)
+    if (!response.ok) throw new Error('Error al obtener los pacientes')
+    pacientes.value = await response.json()
+  } catch (error) {
+    console.error('Error de conexion:', error)
+  }
+}
+
+const iniciarAsignacion = (numero: string) => {
+  cancelarTraslado()
+  camaAsignar.value = numero
+  pacienteSeleccionado.value = null
+  fetchPacientes()
+}
+
+const cancelarAsignacion = () => {
+  camaAsignar.value = null
+  pacienteSeleccionado.value = null
+}
+
+const confirmarAsignacion = async () => {
+  if (!camaAsignar.value || !pacienteSeleccionado.value) return
+  await procesarAccion('asignar', camaAsignar.value, { pacienteId: pacienteSeleccionado.value })
+  cancelarAsignacion()
+}
 const liberar = (numero: string) => procesarAccion('liberar', numero)
 const limpiar = (numero: string) => procesarAccion('limpiar', numero)
 const desbloquear = (numero: string) => procesarAccion('desbloquear', numero)
 
 const iniciarTraslado = (numero: string) => {
+  cancelarAsignacion()
   camaOrigenTraslado.value = numero
   destinoTraslado.value = ''
 }
@@ -199,7 +261,7 @@ const cancelarTraslado = () => {
 const confirmarTraslado = async () => {
   if (!camaOrigenTraslado.value || !destinoTraslado.value) return
   try {
-    const response = await fetch('http://localhost:3000/camas/trasladar', {
+    const response = await fetch(`${API_URL}/camas/trasladar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -226,7 +288,7 @@ let eventos: EventSource | null = null
 onMounted(() => {
   fetchCamas()
 
-  eventos = new EventSource('http://localhost:3000/camas/eventos')
+  eventos = new EventSource(`${API_URL}/camas/eventos`)
   eventos.onmessage = () => fetchCamas()
 })
 
@@ -298,7 +360,33 @@ onUnmounted(() => eventos?.close())
 .hospital-table {
   width: 100%;
   border-collapse: collapse;
-  text-align: left;
+  table-layout: fixed; /* el ancho de cada columna lo deciden los th, no el contenido */
+}
+
+/* Encabezado y celda de la misma columna comparten alineación */
+.hospital-table th,
+.hospital-table td {
+  text-align: center;
+}
+
+/* Anchos por columna: ID, Número, Estado, Paciente, Versión, Acciones */
+.hospital-table th:nth-child(1) {
+  width: 7%;
+}
+.hospital-table th:nth-child(2) {
+  width: 17%;
+}
+.hospital-table th:nth-child(3) {
+  width: 15%;
+}
+.hospital-table th:nth-child(4) {
+  width: 20%;
+}
+.hospital-table th:nth-child(5) {
+  width: 10%;
+}
+.hospital-table th:nth-child(6) {
+  width: 31%;
 }
 
 .hospital-table th {
