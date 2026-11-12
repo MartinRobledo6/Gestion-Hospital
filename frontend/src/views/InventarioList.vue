@@ -135,7 +135,7 @@ const cantidadesReposicion = ref<Record<number, number | null>>({})
 
 const fetchInsumos = async () => {
   try {
-    const response = await fetch('http://localhost:3000/inventario')
+    const response = await fetch(`${API_URL}/inventario`)
     if (!response.ok) throw new Error('Error al obtener el inventario')
     insumos.value = await response.json()
   } catch (error) {
@@ -145,7 +145,7 @@ const fetchInsumos = async () => {
 
 const crearInsumo = async () => {
   try {
-    const response = await fetch('http://localhost:3000/inventario', {
+    const response = await fetch(`${API_URL}/inventario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nuevoInsumo.value),
@@ -165,7 +165,7 @@ const reponerInsumo = async (id: number) => {
   const cantidad = cantidadesReposicion.value[id]
   if (!cantidad || cantidad < 1) return
   try {
-    const response = await fetch(`http://localhost:3000/inventario/${id}/reponer`, {
+    const response = await fetch(`${API_URL}/inventario/${id}/reponer`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cantidad }),
@@ -189,7 +189,7 @@ const reponerInsumo = async (id: number) => {
 const eliminarInsumo = async (id: number) => {
   if (!confirm('¿Estás seguro de eliminar este insumo del sistema?')) return
   try {
-    const response = await fetch(`http://localhost:3000/inventario/${id}`, {
+    const response = await fetch(`${API_URL}/inventario/${id}`, {
       method: 'DELETE',
     })
     if (!response.ok) {
