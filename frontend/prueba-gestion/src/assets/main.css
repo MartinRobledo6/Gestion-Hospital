@@ -1,0 +1,278 @@
+:root {
+  --paper: #f3f6f5;
+  --surface: #ffffff;
+  --ink: #16272a;
+  --muted: #566669;
+  --line: #d3dcda;
+  --brand: #0e6b73;
+  --brand-dark: #0a4f55;
+  --brand-soft: #e1f0f1;
+  --critical: #b3261e;
+  --critical-soft: #fbe9e7;
+  --warn: #85560a;
+  --warn-soft: #fff1d0;
+  --ok: #2b6a3d;
+  --ok-soft: #e4f1e7;
+  --radius: 8px;
+  --font: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---------- Estructura compartida ---------- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- Formularios ---------- */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field label,
+.field legend {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.field input[type='text'],
+.field input[type='number'],
+.field select {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #9fb0ae;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+}
+
+.field input.is-warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.field input.is-critical {
+  border-color: var(--critical);
+  background: var(--critical-soft);
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--critical);
+}
+
+.field-error {
+  color: var(--critical);
+  font-size: 0.8125rem;
+}
+
+.field-note {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.field-note.is-warn {
+  color: var(--warn);
+}
+
+.field-note.is-critical {
+  color: var(--critical);
+  font-weight: 600;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border-radius: 6px;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--brand-dark);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--brand-soft);
+}
+
+/* ---------- Tablas ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data th {
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--line);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.data tr.row-critical td {
+  background: var(--critical-soft);
+}
+
+table.data tr.row-critical td:first-child {
+  box-shadow: inset 5px 0 0 var(--critical);
+}
+
+td.cell-warn {
+  color: var(--warn);
+  font-weight: 650;
+}
+
+td.cell-critical {
+  color: var(--critical);
+  font-weight: 700;
+}
+
+/* ---------- Etiquetas de estado ---------- */
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge-brand {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+
+.badge-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.badge-critical {
+  background: var(--critical);
+  color: #fff;
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .notice {
+    animation: notice-in 0.18s ease-out;
+  }
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
