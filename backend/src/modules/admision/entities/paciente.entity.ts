@@ -10,4 +10,7 @@ export class PacienteEntity {
 
   @Column({ length: 160, unique: true })
   email!: string;
+
+  @Column({ type: 'int', nullable: true })
+  coberturaId!: number | null;
 }

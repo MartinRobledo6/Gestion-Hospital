@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AdmisionModule } from './modules/admision/admision.module.js';
 import { IamModule } from './modules/iam/iam.module.js';
 import { FacturacionModule } from './modules/facturacion/facturacion.module.js';
 
 @Module({
   imports: [
+    // Sin esto, ningún @OnEvent se dispara (HU 2.1 de Facturación)
+    EventEmitterModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'mssql',
       host: process.env.DB_HOST ?? 'localhost',
