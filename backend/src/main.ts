@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
-import { ValidationPipe } from '@nestjs/common/pipes/index.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -8,6 +9,10 @@ async function bootstrap() {
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(Number(process.env.PORT ?? 3000));
 }
-await bootstrap();
+
+bootstrap().catch((error: unknown) => {
+  console.error('No se pudo iniciar el backend:', error);
+  process.exitCode = 1;
+});
