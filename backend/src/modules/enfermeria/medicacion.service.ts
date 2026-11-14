@@ -6,10 +6,14 @@ import { IndicacionMedica } from './indicacion-medica.entity.js';
 import { MedicationAdministration } from './medication-administration.entity.js';
 import { CreateIndicationDto } from './dto/create-indication.dto.js';
 import { CreateMedicationAdministrationDto } from './dto/create-medication-administration.dto.js';
+import { MEDICACION_ADMINISTRADA } from '../facturacion/eventos/medicacion-administrada.evento.js';
+import type { MedicacionAdministradaEvento } from '../facturacion/eventos/medicacion-administrada.evento.js';
 
 import { Inventario } from '../inventario/entities/inventario.entity.js';
 import { Paciente } from '../hce/entities/paciente.entity.js';
 import { Usuario } from '../hce/entities/usuario.entity.js';
+
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import {
   checkRegistration,
@@ -61,6 +65,7 @@ export class MedicacionService {
     private readonly administrations: Repository<MedicationAdministration>,
 
     private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ---------- Inventario central ----------
@@ -296,114 +301,131 @@ export class MedicacionService {
 
   // ---------- Confirmar una dosis ----------
 
-  async registerMedicationAdministration(
-    dto: CreateMedicationAdministrationDto,
-  ): Promise<MedicationAdministration> {
-    return this.dataSource.transaction(async (manager) => {
-      const indication = await manager
-        .createQueryBuilder(IndicacionMedica, 'i')
+  
+async registerMedicationAdministration(
+  dto: CreateMedicationAdministrationDto,
+): Promise<MedicationAdministration> {
+  let evento: MedicacionAdministradaEvento | null = null;
+
+  const saved = await this.dataSource.transaction(async (manager) => {
+    const indication = await manager
+      .createQueryBuilder(IndicacionMedica, 'i')
+      .setLock('pessimistic_write')
+      .where('i.id = :id', { id: dto.indicationId })
+      .getOne();
+
+    if (!indication) {
+      throw new NotFoundException(
+        `No existe la indicación #${dto.indicationId}.`,
+      );
+    }
+
+    if (!indication.active) {
+      throw new BadRequestException(
+        'La indicación ya no está activa.',
+      );
+    }
+
+    const frequencyMatch = indication.frequency.match(/\d+/);
+    const everyHours = frequencyMatch
+      ? Number(frequencyMatch[0])
+      : 0;
+
+    if (everyHours < 1) {
+      throw new BadRequestException(
+        'La frecuencia de la indicación no es válida.',
+      );
+    }
+
+    const slot = snapToSlot(
+      {
+        firstDoseAt: indication.firstDoseAt,
+        everyHours,
+      },
+      new Date(dto.scheduledAt),
+    );
+
+    if (!slot) {
+      throw new BadRequestException(
+        'Ese horario no corresponde a una dosis de esta indicación.',
+      );
+    }
+
+    const motivo = checkRegistration(
+      dto.status,
+      doseTiming(slot, new Date()),
+    );
+
+    if (motivo) {
+      throw new BadRequestException(motivo);
+    }
+
+    const yaRegistrada = await manager.count(
+      MedicationAdministration,
+      {
+        where: {
+          indicationId: indication.id,
+          scheduledAt: slot,
+        },
+      },
+    );
+
+    if (yaRegistrada > 0) {
+      throw new ConflictException(
+        'Esa dosis ya fue registrada.',
+      );
+    }
+
+    const administration = await manager.save(
+      manager.create(MedicationAdministration, {
+        indicationId: indication.id,
+        nurseId: dto.nurseId,
+        status: dto.status,
+        scheduledAt: slot,
+      }),
+    );
+
+    if (dto.status === 'Administrada') {
+      const supply = await manager
+        .createQueryBuilder(Inventario, 's')
         .setLock('pessimistic_write')
-        .where('i.id = :id', { id: dto.indicationId })
+        .where('s.Id = :id', { id: indication.supplyId })
         .getOne();
 
-      if (!indication) {
-        throw new NotFoundException(
-          `No existe la indicación #${dto.indicationId}.`,
-        );
-      }
-
-      if (!indication.active) {
-        throw new BadRequestException(
-          'La indicación ya no está activa.',
-        );
-      }
-
-      const frequencyMatch = indication.frequency.match(/\d+/);
-      const everyHours = frequencyMatch
-        ? Number(frequencyMatch[0])
-        : 0;
-
-      if (everyHours < 1) {
-        throw new BadRequestException(
-          'La frecuencia de la indicación no es válida.',
-        );
-      }
-
-      const slot = snapToSlot(
-        {
-          firstDoseAt: indication.firstDoseAt,
-          everyHours,
-        },
-        new Date(dto.scheduledAt),
-      );
-
-      if (!slot) {
-        throw new BadRequestException(
-          'Ese horario no corresponde a una dosis de esta indicación.',
-        );
-      }
-
-      const motivo = checkRegistration(
-        dto.status,
-        doseTiming(slot, new Date()),
-      );
-
-      if (motivo) {
-        throw new BadRequestException(motivo);
-      }
-
-      const yaRegistrada = await manager.count(
-        MedicationAdministration,
-        {
-          where: {
-            indicationId: indication.id,
-            scheduledAt: slot,
-          },
-        },
-      );
-
-      if (yaRegistrada > 0) {
+      if (!supply) {
         throw new ConflictException(
-          'Esa dosis ya fue registrada.',
+          `El insumo #${indication.supplyId} ya no existe en el inventario.`,
         );
       }
 
-      const saved = await manager.save(
-        manager.create(MedicationAdministration, {
-          indicationId: indication.id,
-          nurseId: dto.nurseId,
-          status: dto.status,
-          scheduledAt: slot,
-        }),
-      );
-
-      if (dto.status === 'Administrada') {
-        const supply = await manager
-          .createQueryBuilder(Inventario, 's')
-          .setLock('pessimistic_write')
-          .where('s.Id = :id', { id: indication.supplyId })
-          .getOne();
-
-        if (!supply) {
-          throw new ConflictException(
-            `El insumo #${indication.supplyId} ya no existe en el inventario.`,
-          );
-        }
-
-        if (supply.StockActual < 1) {
-          throw new ConflictException(
-            `No hay stock de ${supply.Nombre} en el inventario.`,
-          );
-        }
-
-        supply.StockActual -= 1;
-
-        await manager.save(supply);
+      if (supply.StockActual < 1) {
+        throw new ConflictException(
+          `No hay stock de ${supply.Nombre} en el inventario.`,
+        );
       }
 
-      return saved;
-    });
+      supply.StockActual -= 1;
+      await manager.save(supply);
+
+      evento = {
+        eventoId: `enfermeria-administracion-${administration.id}`,
+        pacienteId: indication.patientId,
+        insumo: supply.Nombre,
+        cantidad: 1,
+      };
+    }
+
+    return administration;
+  });
+
+  // Se emite únicamente después de confirmar la transacción.
+  if (evento) {
+    this.eventEmitter.emit(MEDICACION_ADMINISTRADA, evento);
   }
+
+  return saved;
+}
+
 
     async getAllMedicationAdministrations() {
     const administraciones = await this.administrations.find({

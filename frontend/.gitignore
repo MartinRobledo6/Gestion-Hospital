@@ -1,3 +1,4 @@
+
 # Logs
 logs
 *.log
@@ -23,9 +24,9 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+.vs/
 
 *.tsbuildinfo
-
 .eslintcache
 
 # Cypress

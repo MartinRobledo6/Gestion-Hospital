@@ -5,7 +5,7 @@ import { CreateInventarioDto } from './dto/create-inventario.dto.js';
 import { UpdateInventarioDto } from './dto/update-inventario.dto.js';
 import { Inventario } from './entities/inventario.entity.js';
 import { OnEvent } from '@nestjs/event-emitter';
-import { esViolacionForeignKey } from '../common/db-errors.js';
+import { esViolacionForeignKey } from '../../common/db-errors.js';
 
 @Injectable()
 export class InventarioService {

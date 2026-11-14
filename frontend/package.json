@@ -1,3 +1,4 @@
+
 {
   "name": "package",
   "version": "0.0.0",
@@ -17,7 +18,7 @@
   "dependencies": {
     "pinia": "^4.0.3",
     "vue": "^3.5.42",
-    "vue-router": "^5.3.1"
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.5",

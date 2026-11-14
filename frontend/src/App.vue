@@ -1,93 +1,211 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from './stores/auth'
+
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+const esPublica = computed(() => route.meta.publica === true)
+
+const todosLosEnlaces = [
+  { to: '/usuarios', texto: 'Usuarios' },
+  { to: '/admision', texto: 'Admisión' },
+  { to: '/Profesional', texto: 'Profesionales' },
+  { to: '/mi-agenda', texto: 'Mi agenda' },
+  { to: '/guardia', texto: 'Guardia' },
+  { to: '/facturacion', texto: 'Facturación' },
+  { to: '/camas', texto: 'Camas' },
+  { to: '/inventario', texto: 'Inventario' },
+  { to: '/hce', texto: 'Historia Clínica' },
+  { to: '/enfermeria', texto: 'Enfermería' },
+]
+
+const enlaces = computed(() =>
+  todosLosEnlaces.filter((e) => {
+    const meta = router.resolve(e.to).meta
+    return auth.puedeEntrar(meta.roles, meta.exacto)
+  }),
+)
+
+const cerrarSesion = async () => {
+  auth.logout()
+  await router.push('/login')
+}
 </script>
 
 <template>
-  <nav class="hospital-navbar">
-    <div class="navbar-brand">
-      <span class="logo-icon">🏥</span>
-      <h1>Gestión Hospitalaria</h1>
-    </div>
+  <div class="app">
+    <header class="barra">
+      <div class="barra-interior">
+        <RouterLink :to="esPublica ? '/solicitar-turno' : auth.home" class="marca">
+          <span class="logo" aria-hidden="true">🏥</span>
+          Gestión Hospitalaria
+        </RouterLink>
 
-    <div class="navbar-links">
-      <RouterLink to="/camas" class="nav-item">Camas</RouterLink>
-      <RouterLink to="/inventario" class="nav-item">Inventario</RouterLink>
-      <RouterLink to="/hce" class="nav-item">Historia Clinica</RouterLink>
-      <RouterLink to="/enfermeria" class="nav-item">Enfermería</RouterLink>
-    </div>
-  </nav>
+        <nav v-if="!esPublica" class="menu" aria-label="Navegación principal">
+          <RouterLink v-for="e in enlaces" :key="e.to" :to="e.to" class="enlace">
+            {{ e.texto }}
+          </RouterLink>
+        </nav>
 
-  <main class="main-content">
-    <RouterView />
-  </main>
+        <div v-if="!esPublica && auth.usuario" class="sesion">
+          <span class="usuario">{{ auth.usuario.nombre }}</span>
+          <button type="button" class="salir" @click="cerrarSesion">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="contenido">
+      <RouterView />
+    </main>
+  </div>
 </template>
 
 <style>
 html,
-body,
-#app {
+body {
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100vh;
-  background-color: #f8fafc;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #f8fafc;
 }
 
-.hospital-navbar {
+#app {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+</style>
+
+<style scoped>
+.app {
+  --azul: #0a7bc4;
+  --texto: #1e293b;
+  --suave: #64748b;
+
+  min-height: 100vh;
+  background: #f8fafc;
+  color: var(--texto);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+}
+
+.barra {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 2px solid var(--azul);
+}
+
+.barra-interior {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background-color: #ffffff;
-  padding: 1rem 3rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  border-bottom: 3px solid #0284c7;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 32px;
 }
 
-.navbar-brand {
+.marca {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.navbar-brand h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #334155;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.logo-icon {
-  font-size: 1.8rem;
-}
-
-.navbar-links {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-item {
+  color: #334155;
   text-decoration: none;
-  color: #64748b;
-  font-weight: 600;
-  font-size: 1rem;
-  padding: 0.6rem 1.2rem;
+  white-space: nowrap;
+}
+
+.logo {
+  font-size: 1.5rem;
+}
+
+.menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.enlace {
+  padding: 8px 12px;
   border-radius: 8px;
-  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--suave);
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.nav-item:hover {
-  background-color: #f1f5f9;
-  color: #0284c7;
+.enlace:hover {
+  background: #f1f5f9;
+  color: var(--texto);
 }
 
-.router-link-active {
-  background-color: #e0f2fe;
-  color: #0284c7;
+.enlace.router-link-active {
+  background: #eaf4fb;
+  color: var(--azul);
 }
 
-.main-content {
-  padding-top: 1rem;
+.sesion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.usuario {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--suave);
+  white-space: nowrap;
+}
+
+.salir {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.salir:hover {
+  background: #f1f5f9;
+}
+
+.marca:focus-visible,
+.enlace:focus-visible,
+.salir:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
+}
+
+.contenido {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .barra-interior {
+    flex-wrap: wrap;
+    padding: 10px 16px;
+  }
+
+  .menu {
+    flex: 1 1 100%;
+  }
 }
 </style>

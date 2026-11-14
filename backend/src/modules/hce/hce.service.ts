@@ -10,7 +10,7 @@ import { CrearHistoriaClinicaDto } from './dto/crear-historia-clinica.dto.js';
 import { CrearEvolucionDto } from './dto/crear-evolucion.dto.js';
 import { ActualizarHistoriaClinicaDto } from './dto/actualizar-historia-clinica.dto.js';
 import { CrearEstudioDto } from './dto/crear-estudio.dto.js';
-import { esViolacionUnique } from '../common/db-errors.js';
+import { esViolacionUnique } from '../../common/db-errors.js';
 
 @Injectable()
 export class HceService {

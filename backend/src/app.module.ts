@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CamasModule } from './camas/camas.module.js';
-import { InventarioModule } from './inventario/inventario.module.js';
-import {EventEmitterModule} from "@nestjs/event-emitter";
-import { HceModule } from './hce/hce.module.js';
-import { EnfermeriaModule } from './enfermeria/enfermeria.module.js';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+
+import { CamasModule } from './modules/camas/camas.module.js';
+import { InventarioModule } from './modules/inventario/inventario.module.js';
+import { HceModule } from './modules/hce/hce.module.js';
+import { EnfermeriaModule } from './modules/enfermeria/enfermeria.module.js';
+
+import { AdmisionModule } from './modules/admision/admision.module.js';
+import { IamModule } from './modules/iam/iam.module.js';
+import { FacturacionModule } from './modules/facturacion/facturacion.module.js';
 
 @Module({
   imports: [
@@ -25,13 +30,18 @@ import { EnfermeriaModule } from './enfermeria/enfermeria.module.js';
 
     EventEmitterModule.forRoot(),
 
+    // Módulos existentes: Martín + Nacho
     CamasModule,
     InventarioModule,
     HceModule,
     EnfermeriaModule,
+
+    // Módulos incorporados: Mulla + Acosta
+    AdmisionModule,
+    IamModule,
+    FacturacionModule,
   ],
   controllers: [],
   providers: [],
 })
 export class AppModule {}
-

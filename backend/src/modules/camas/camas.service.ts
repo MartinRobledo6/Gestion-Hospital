@@ -5,7 +5,7 @@ import { Cama, EstadoCama } from './entities/cama.entity.js';
 import { AsignacionCama } from './entities/asignacion-cama.entity.js';
 import { Paciente } from '../hce/entities/paciente.entity.js';
 import { OperacionCama, siguienteEstado } from './estados/cama-state.js';
-import { esViolacionUnique } from '../common/db-errors.js';
+import { esViolacionUnique } from '../../common/db-errors.js';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 type CambioCama = { cama: Cama; desde: EstadoCama };

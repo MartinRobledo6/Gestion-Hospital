@@ -1,12 +1,14 @@
-
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
 import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  app.enableCors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -15,7 +17,10 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(3000);
+  await app.listen(Number(process.env.PORT ?? 3000));
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  console.error('No se pudo iniciar el backend:', error);
+  process.exitCode = 1;
+});
