@@ -120,7 +120,7 @@ export class MedicacionService {
 
   async createIndication(
     dto: CreateIndicationDto,
-  ): Promise<IndicacionMedica> {
+  ){
     const [patient, doctor, supply] = await Promise.all([
       this.patients.findOneBy({ Id: dto.patientId }),
 
@@ -170,7 +170,7 @@ export class MedicacionService {
       );
     }
 
-    return this.indications.save(
+        const saved = await this.indications.save(
       this.indications.create({
         patientId: patient.Id,
         medicoId: doctor.id,
@@ -181,6 +181,14 @@ export class MedicacionService {
         active: true,
       }),
     );
+
+    // Misma forma que devuelve listIndications: el front usa patientName y medication.
+    return {
+      ...saved,
+      patientName: `${patient.Nombre} ${patient.Apellido}`,
+      medication: supply.Nombre,
+      medicoName: doctor.nombreUsuario,
+    };
   }
 
   // ---------- Dosis del día ----------
@@ -397,9 +405,16 @@ export class MedicacionService {
     });
   }
 
-  getAllMedicationAdministrations(): Promise<MedicationAdministration[]> {
-    return this.administrations.find({
+    async getAllMedicationAdministrations() {
+    const administraciones = await this.administrations.find({
+      relations: { nurse: true },
       order: { administeredAt: 'DESC' },
     });
+
+    // Devolvemos solo lo que necesita el front: nunca el usuario entero (tiene Email y PasswordHash).
+    return administraciones.map(({ nurse, ...a }) => ({
+      ...a,
+      nurseName: nurse?.nombreUsuario ?? null,
+    }));
   }
 }

@@ -1,10 +1,12 @@
-
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Usuario } from '../hce/entities/usuario.entity.js';
 
 @Entity('AdministracionMedicion')
 export class MedicationAdministration {
@@ -16,6 +18,11 @@ export class MedicationAdministration {
 
   @Column({ type: 'int', name: 'EnfermeroId' })
   nurseId: number;
+
+  // Misma columna que nurseId, pero como relación: permite traer los datos del usuario.
+  @ManyToOne(() => Usuario, { createForeignKeyConstraints: false })
+  @JoinColumn({ name: 'EnfermeroId' })
+  nurse?: Usuario;
 
   @CreateDateColumn({
     type: 'datetime',
@@ -34,5 +41,3 @@ export class MedicationAdministration {
   @Column({ type: 'varchar', length: 50, name: 'Estado' })
   status: string;
 }
-
-

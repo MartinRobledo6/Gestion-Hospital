@@ -23,11 +23,19 @@ const filtradas = computed(() => {
 
     <div class="field search">
       <label for="med-buscar">Buscar por número de indicación</label>
-      <input id="med-buscar" v-model="busqueda" type="text" inputmode="numeric" autocomplete="off" />
+      <input
+        id="med-buscar"
+        v-model="busqueda"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+      />
     </div>
 
     <p v-if="store.cargando && !store.administraciones.length" class="empty">Cargando registros…</p>
-    <p v-else-if="!store.administraciones.length" class="empty">Todavía no se registró ninguna administración.</p>
+    <p v-else-if="!store.administraciones.length" class="empty">
+      Todavía no se registró ninguna administración.
+    </p>
     <p v-else-if="!filtradas.length" class="empty">Ningún registro coincide con la búsqueda.</p>
 
     <div v-else class="table-wrap">
@@ -37,7 +45,7 @@ const filtradas = computed(() => {
             <th>Dosis programada</th>
             <th>Registrada</th>
             <th>Indicación</th>
-            <th>ID enfermero/a</th>
+            <th>Enfermero/a</th>
             <th>Resultado</th>
           </tr>
         </thead>
@@ -46,9 +54,13 @@ const filtradas = computed(() => {
             <td>{{ a.scheduledAt ? formatearFechaHora(a.scheduledAt) : '—' }}</td>
             <td>{{ formatearFechaHora(a.administeredAt) }}</td>
             <td>#{{ a.indicationId }}</td>
-            <td>{{ a.nurseId }}</td>
+            <td>{{ a.nurseName ?? `ID ${a.nurseId}` }}</td>
             <td>
-              <span class="badge" :class="a.status === 'Administrada' ? 'badge-ok' : 'badge-warn'">{{ a.status }}</span>
+              <span
+                class="badge"
+                :class="a.status === 'Administrada' ? 'badge-ok' : 'badge-warn'"
+                >{{ a.status }}</span
+              >
             </td>
           </tr>
         </tbody>

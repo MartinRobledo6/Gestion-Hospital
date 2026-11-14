@@ -33,6 +33,7 @@ export interface MedicationAdministration {
   id: number
   indicationId: number
   nurseId: number
+  nurseName: string | null
   administeredAt: string
   scheduledAt: string | null
   status: MedicationStatus
@@ -63,6 +64,7 @@ export interface Indication {
   firstDoseAt: string
   active: boolean
   createdAt: string
+  medicoName?: string
 }
 
 export interface CreateIndication {

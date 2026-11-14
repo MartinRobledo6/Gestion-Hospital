@@ -185,7 +185,7 @@ export const useEnfermeriaStore = defineStore('enfermeria', () => {
 
     aviso.value = {
       tipo: 'exito',
-      texto: `Indicación de ${creada.medication} creada para ${creada.patientName}.`,
+            texto: `Indicación del Dr./Dra. ${creada.medicoName} creada para ${creada.patientName}: ${creada.medication}.`,
     }
 
     return true
