@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useEnfermeriaStore } from '../useEnfermeriaStore'
+import PacienteSelect from '@/components/PacienteSelect.vue'
 
 const store = useEnfermeriaStore()
 
-const pacienteId = ref<string | number>('')
+const pacienteId = ref<number | null>(null)
 const dosis = ref('')
 const cadaHoras = ref<string | number>(8)
 const primera = ref('')
@@ -13,11 +14,11 @@ const error = ref('')
 const enviando = ref(false)
 
 async function guardar() {
-  const paciente = Number(pacienteId.value)
+  const paciente = pacienteId.value
   const horas = Number(cadaHoras.value)
 
-  if (!Number.isInteger(paciente) || paciente < 1) {
-    error.value = 'Ingresá un ID de paciente válido.'
+  if (paciente === null) {
+    error.value = 'Seleccioná un paciente.'
     return
   }
 
@@ -55,8 +56,8 @@ async function guardar() {
   enviando.value = false
 
   if (ok) {
+    pacienteId.value = null
     dosis.value = ''
-    pacienteId.value = ''
     primera.value = ''
   }
 }
@@ -69,8 +70,8 @@ async function guardar() {
 
       <form class="form-grid" novalidate @submit.prevent="guardar">
         <div class="field">
-          <label for="in-pid">ID del paciente</label>
-          <input id="in-pid" v-model="pacienteId" type="number" min="1" step="1" />
+          <label for="in-pid">Paciente</label>
+          <PacienteSelect id="in-pid" v-model="pacienteId" />
         </div>
 
         <div class="field">
