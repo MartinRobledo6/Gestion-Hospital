@@ -1,7 +1,7 @@
 # TP - Sistema de Gestión Hospitalaria
 
-Mini SaaS hospitalario desarrollado como Trabajo Práctico de la Tecnicatura Universitaria en
-Programación (UTN San Francisco).
+Mini sistema hospitalario desarrollado como Trabajo Práctico de la Tecnicatura Universitaria en
+Programación.
 
 **Integrantes:** Martín Robledo, Ignacio Beltramino, Joaquín Mullasano y Joaquín Acosta.
 
