@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { CreateInventarioDto } from './dto/create-inventario.dto.js';
 import { UpdateInventarioDto } from './dto/update-inventario.dto.js';
 import { Inventario } from './entities/inventario.entity.js';
-import { OnEvent } from '@nestjs/event-emitter';
 import { esViolacionForeignKey } from '../../common/db-errors.js';
 
 @Injectable()
@@ -51,35 +50,4 @@ export class InventarioService {
       }
     }
   }
-
-  @OnEvent('insumo.administrado', { async: true })
-    async manejarDescuentoDeStock(payload: { insumoId: number; cantidad: number }) {
-      console.log(`Evento recibido: Descontando ${payload.cantidad} unidades del insumo ID ${payload.insumoId}...`);
-
-      try{
-        const result = await this.inventarioRepository
-          .createQueryBuilder()
-          .update(Inventario)
-          .set({ StockActual: () => `StockActual - ${payload.cantidad}` })
-          .where("Id = :id", { id: payload.insumoId })
-          .andWhere("StockActual >= :cantidad", { cantidad: payload.cantidad })
-          .execute();
-
-          if (result.affected === 0) {
-        console.error(
-          `No se pudo descontar ${payload.cantidad} u. del insumo ID ${payload.insumoId}: no existe o no hay suficiente stock.`,
-        );
-        return;
-      }
-      console.log(`Stock descontado exitosamente para el insumo ID ${payload.insumoId}.`);
-      const insumo = await this.inventarioRepository.findOne({ where: { Id: payload.insumoId } });
-      if (insumo && insumo.StockActual <= insumo.StockMinimo) {
-        console.warn(
-          `ALERTA STOCK BAJO: "${insumo.Nombre}" quedó en ${insumo.StockActual} u. (mínimo: ${insumo.StockMinimo}).`,
-        );
-      }
-      } catch (error) {
-        console.error(`Error al descontar el stock del insumo ID ${payload.insumoId}:`, error);
-      }
-    }
 }

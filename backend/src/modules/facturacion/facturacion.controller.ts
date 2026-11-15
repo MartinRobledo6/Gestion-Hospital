@@ -4,7 +4,6 @@ import {
   AbrirCuentaDto,
   AsignarCoberturaDto,
   FacturarPrestacionDto,
-  SimularMedicacionDto,
 } from './dto/facturacion.dto.js';
 import { Auth } from '../iam/auth.decorador.js';
 import { Rol } from '../iam/rol.enum.js';
@@ -19,11 +18,6 @@ export class FacturacionController {
   @Get('coberturas')
   listarCoberturas() {
     return this.facturacionService.listarCoberturas();
-  }
-
-  @Get('precios-insumos')
-  listarPreciosInsumos() {
-    return this.facturacionService.listarPreciosInsumos();
   }
 
   // ---------- Pacientes ----------
@@ -72,16 +66,5 @@ export class FacturacionController {
   @Get('reportes/resumen')
   resumenFacturado() {
     return this.facturacionService.resumenFacturado();
-  }
-
-  // HU 2.1: simula el evento de Enfermería hasta que ese módulo esté integrado
-  @Auth(Rol.ADMINISTRADOR)
-  @Post('eventos/medicacion-administrada')
-  simularMedicacion(@Body() dto: SimularMedicacionDto) {
-    return this.facturacionService.simularMedicacionAdministrada(
-      dto.pacienteId,
-      dto.insumo,
-      dto.cantidad,
-    );
   }
 }

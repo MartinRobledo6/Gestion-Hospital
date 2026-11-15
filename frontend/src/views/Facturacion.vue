@@ -1,205 +1,189 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { apiFetch } from '../api';
-import { useAuthStore } from '../stores/auth';
+import { computed, onMounted, ref } from 'vue'
+import { apiFetch } from '../api'
 
 // ---------- Tipos ----------
 interface Cobertura {
-  Id: number;
-  Nombre: string;
-  Tipo: 'PUBLICA' | 'PREPAGA' | 'PARTICULAR';
-  CopagoFijo: number;
+  Id: number
+  Nombre: string
+  Tipo: 'PUBLICA' | 'PREPAGA' | 'PARTICULAR'
+  CopagoFijo: number
 }
 
 interface Paciente {
-  id: number;
-  nombre: string;
-  email: string;
-  coberturaId: number | null;
-  coberturaNombre: string;
-  cuentaAbiertaId: number | null;
+  id: number
+  nombre: string
+  email: string
+  coberturaId: number | null
+  coberturaNombre: string
+  cuentaAbiertaId: number | null
 }
 
 interface Cuenta {
-  Id: number;
-  PacienteId: number;
-  pacienteNombre: string;
-  Estado: string;
-  FechaApertura: string;
-  TotalCargoPaciente: number;
-  TotalCargoTerceros: number;
+  Id: number
+  PacienteId: number
+  pacienteNombre: string
+  Estado: string
+  FechaApertura: string
+  TotalCargoPaciente: number
+  TotalCargoTerceros: number
 }
 
 interface Cargo {
-  Id: number;
-  Concepto: string;
-  Detalle: string | null;
-  Destinatario: 'PACIENTE' | 'ESTADO' | 'PREPAGA';
-  Monto: number;
-  ReferenciaEventoId: string | null;
-  FechaCargo: string;
+  Id: number
+  Concepto: string
+  Detalle: string | null
+  Destinatario: 'PACIENTE' | 'ESTADO' | 'PREPAGA'
+  Monto: number
+  ReferenciaEventoId: string | null
+  FechaCargo: string
 }
 
 interface DetalleCuenta extends Cuenta {
-  cobertura: { nombre: string; tipo: string; copagoFijo: number };
-  cargos: Cargo[];
-}
-
-interface PrecioInsumo {
-  Id: number;
-  Insumo: string;
-  PrecioUnitario: number;
+  cobertura: { nombre: string; tipo: string; copagoFijo: number }
+  cargos: Cargo[]
 }
 
 // Lo que devuelve GET /facturacion/reportes/resumen
-type ResumenFacturado = Record<Cargo['Destinatario'], number>;
+type ResumenFacturado = Record<Cargo['Destinatario'], number>
 
 interface Aviso {
-  tipo: 'ok' | 'error';
-  texto: string;
+  tipo: 'ok' | 'error'
+  texto: string
 }
 
-const API_URL = 'http://localhost:3000/facturacion';
+const API_URL = 'http://localhost:3000/facturacion'
 
 const DESTINATARIOS: Record<Cargo['Destinatario'], string> = {
   PACIENTE: 'Paciente',
   ESTADO: 'Estado (subsidio)',
   PREPAGA: 'Prepaga',
-};
-
-const auth = useAuthStore();
-const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR');
+}
 
 // ---------- Estado ----------
-const coberturas = ref<Cobertura[]>([]);
-const pacientes = ref<Paciente[]>([]);
-const cuentas = ref<Cuenta[]>([]);
-const precios = ref<PrecioInsumo[]>([]);
-const detalle = ref<DetalleCuenta | null>(null);
-const resumen = ref<ResumenFacturado | null>(null);
-const aviso = ref<Aviso | null>(null);
-const enviando = ref(false);
+const coberturas = ref<Cobertura[]>([])
+const pacientes = ref<Paciente[]>([])
+const cuentas = ref<Cuenta[]>([])
+const detalle = ref<DetalleCuenta | null>(null)
+const resumen = ref<ResumenFacturado | null>(null)
+const aviso = ref<Aviso | null>(null)
+const enviando = ref(false)
 
-const formPrestacion = ref({ concepto: 'Consulta Médica General', costoBase: 15000 });
-const formInsumo = ref({ insumo: '', cantidad: 1 });
+const formPrestacion = ref({ concepto: 'Consulta Médica General', costoBase: 15000 })
 
 // ---------- Formato ----------
-const pesos = (n: number) =>
-  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
+const pesos = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 const fecha = (iso: string) =>
-  new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
 
 const leerError = async (res: Response, porDefecto: string) => {
   try {
-    const data = await res.json();
-    return Array.isArray(data.message) ? data.message.join(', ') : data.message || porDefecto;
+    const data = await res.json()
+    return Array.isArray(data.message) ? data.message.join(', ') : data.message || porDefecto
   } catch {
-    return porDefecto;
+    return porDefecto
   }
-};
+}
 
 // Envoltorio común: llama, valida el status y devuelve el JSON
-const pedir = async <T>(ruta: string, porDefecto: string, options: RequestInit = {}) => {
+const pedir = async <T,>(ruta: string, porDefecto: string, options: RequestInit = {}) => {
   const res = await apiFetch(`${API_URL}${ruta}`, {
     ...options,
     headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) throw new Error(await leerError(res, porDefecto));
-  return (await res.json()) as T;
-};
+  })
+  if (!res.ok) throw new Error(await leerError(res, porDefecto))
+  return (await res.json()) as T
+}
 
 // Total general: suma los tres destinatarios
 const totalFacturado = computed(() =>
   resumen.value ? Object.values(resumen.value).reduce((a, b) => a + b, 0) : 0,
-);
+)
 
 const mostrarError = (err: unknown) => {
-  aviso.value = { tipo: 'error', texto: err instanceof Error ? err.message : String(err) };
-};
+  aviso.value = { tipo: 'error', texto: err instanceof Error ? err.message : String(err) }
+}
 
 // ---------- Carga ----------
 const cargarTodo = async () => {
   try {
-    const [c, p, cu, pr, re] = await Promise.all([
+    const [c, p, cu, re] = await Promise.all([
       pedir<Cobertura[]>('/coberturas', 'No se pudieron cargar las coberturas.'),
       pedir<Paciente[]>('/pacientes', 'No se pudieron cargar los pacientes.'),
       pedir<Cuenta[]>('/cuentas', 'No se pudieron cargar las cuentas.'),
-      pedir<PrecioInsumo[]>('/precios-insumos', 'No se pudo cargar la lista de precios.'),
       pedir<ResumenFacturado>('/reportes/resumen', 'No se pudo cargar el resumen.'),
-    ]);
-    coberturas.value = c;
-    pacientes.value = p;
-    cuentas.value = cu;
-    precios.value = pr;
-    resumen.value = re;
-    if (!formInsumo.value.insumo && pr[0]) formInsumo.value.insumo = pr[0].Insumo;
-    if (detalle.value) await verCuenta(detalle.value.Id);
+    ])
+    coberturas.value = c
+    pacientes.value = p
+    cuentas.value = cu
+    resumen.value = re
+    if (detalle.value) await verCuenta(detalle.value.Id)
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   }
-};
+}
 
-onMounted(cargarTodo);
+onMounted(cargarTodo)
 
 const verCuenta = async (id: number | null) => {
-  if (id === null) return;
+  if (id === null) return
   try {
-    detalle.value = await pedir<DetalleCuenta>(`/cuentas/${id}`, 'No se pudo cargar la cuenta.');
+    detalle.value = await pedir<DetalleCuenta>(`/cuentas/${id}`, 'No se pudo cargar la cuenta.')
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   }
-};
+}
 
 // ---------- Acciones ----------
 const cambiarCobertura = async (paciente: Paciente, valor: string) => {
-  aviso.value = null;
+  aviso.value = null
   try {
-    const coberturaId = valor === '' ? null : Number(valor);
+    const coberturaId = valor === '' ? null : Number(valor)
     await pedir(`/pacientes/${paciente.id}/cobertura`, 'No se pudo asignar la cobertura.', {
       method: 'PATCH',
       body: JSON.stringify({ coberturaId }),
-    });
-    aviso.value = { tipo: 'ok', texto: `Cobertura de ${paciente.nombre} actualizada.` };
-    await cargarTodo();
+    })
+    aviso.value = { tipo: 'ok', texto: `Cobertura de ${paciente.nombre} actualizada.` }
+    await cargarTodo()
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   }
-};
+}
 
 const abrirCuenta = async (paciente: Paciente) => {
-  aviso.value = null;
+  aviso.value = null
   try {
     const cuenta = await pedir<Cuenta>('/cuentas', 'No se pudo abrir la cuenta.', {
       method: 'POST',
       body: JSON.stringify({ pacienteId: paciente.id }),
-    });
-    aviso.value = { tipo: 'ok', texto: `Cuenta #${cuenta.Id} abierta para ${paciente.nombre}.` };
-    await cargarTodo();
-    await verCuenta(cuenta.Id);
+    })
+    aviso.value = { tipo: 'ok', texto: `Cuenta #${cuenta.Id} abierta para ${paciente.nombre}.` }
+    await cargarTodo()
+    await verCuenta(cuenta.Id)
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   }
-};
+}
 
 const cerrarCuenta = async () => {
-  if (!detalle.value) return;
-  aviso.value = null;
+  if (!detalle.value) return
+  aviso.value = null
   try {
     await pedir(`/cuentas/${detalle.value.Id}/cerrar`, 'No se pudo cerrar la cuenta.', {
       method: 'PATCH',
-    });
-    aviso.value = { tipo: 'ok', texto: `Cuenta #${detalle.value.Id} cerrada.` };
-    await cargarTodo();
+    })
+    aviso.value = { tipo: 'ok', texto: `Cuenta #${detalle.value.Id} cerrada.` }
+    await cargarTodo()
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   }
-};
+}
 
 // HU 1.1: el backend decide cuánto paga cada uno según la cobertura del paciente
 const facturarPrestacion = async () => {
-  if (!detalle.value) return;
-  enviando.value = true;
-  aviso.value = null;
+  if (!detalle.value) return
+  enviando.value = true
+  aviso.value = null
   try {
     const cobro = await pedir<{ cobertura: string; paciente: number; terceros: number }>(
       `/cuentas/${detalle.value.Id}/cargos`,
@@ -211,45 +195,18 @@ const facturarPrestacion = async () => {
           costoBase: Number(formPrestacion.value.costoBase),
         }),
       },
-    );
+    )
     aviso.value = {
       tipo: 'ok',
       texto: `${cobro.cobertura}: el paciente abona ${pesos(cobro.paciente)} y se facturan ${pesos(cobro.terceros)} a terceros.`,
-    };
-    await cargarTodo();
+    }
+    await cargarTodo()
   } catch (err) {
-    mostrarError(err);
+    mostrarError(err)
   } finally {
-    enviando.value = false;
+    enviando.value = false
   }
-};
-
-// HU 2.1: simula el evento que emitiría Enfermería al administrar medicación
-const simularMedicacion = async () => {
-  if (!detalle.value) return;
-  enviando.value = true;
-  aviso.value = null;
-  try {
-    const { eventoId } = await pedir<{ eventoId: string }>(
-      '/eventos/medicacion-administrada',
-      'No se pudo emitir el evento.',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          pacienteId: detalle.value.PacienteId,
-          insumo: formInsumo.value.insumo,
-          cantidad: Number(formInsumo.value.cantidad),
-        }),
-      },
-    );
-    aviso.value = { tipo: 'ok', texto: `Evento ${eventoId.slice(0, 8)}… emitido.` };
-    await cargarTodo();
-  } catch (err) {
-    mostrarError(err);
-  } finally {
-    enviando.value = false;
-  }
-};
+}
 </script>
 
 <template>
@@ -345,15 +302,13 @@ const simularMedicacion = async () => {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="c in cuentas"
-              :key="c.Id"
-              :class="{ 'fila-elegida': detalle?.Id === c.Id }"
-            >
+            <tr v-for="c in cuentas" :key="c.Id" :class="{ 'fila-elegida': detalle?.Id === c.Id }">
               <td class="fuerte">{{ c.Id }}</td>
               <td>{{ c.pacienteNombre }}</td>
               <td>
-                <span :class="['badge', c.Estado === 'Abierta' ? 'verde' : 'gris']">{{ c.Estado }}</span>
+                <span :class="['badge', c.Estado === 'Abierta' ? 'verde' : 'gris']">{{
+                  c.Estado
+                }}</span>
               </td>
               <td>{{ pesos(c.TotalCargoPaciente) }}</td>
               <td>{{ pesos(c.TotalCargoTerceros) }}</td>
@@ -408,40 +363,17 @@ const simularMedicacion = async () => {
           </label>
           <label>
             Valor base (nomenclador)
-            <input v-model.number="formPrestacion.costoBase" type="number" min="1" step="0.01" required />
+            <input
+              v-model.number="formPrestacion.costoBase"
+              type="number"
+              min="1"
+              step="0.01"
+              required
+            />
           </label>
         </div>
         <div class="fila-final">
           <button class="btn btn-primario" :disabled="enviando">Facturar</button>
-        </div>
-      </form>
-
-      <!-- HU 2.1 (solo admin: simula a Enfermería) -->
-      <form
-        v-if="esAdmin && detalle.Estado === 'Abierta'"
-        class="form bloque"
-        @submit.prevent="simularMedicacion"
-      >
-        <h3>Simular medicación administrada</h3>
-        <p class="nota">
-          Emite el evento que enviará Enfermería. Facturación lo escucha y agrega el cargo solo.
-        </p>
-        <div class="fila">
-          <label>
-            Insumo
-            <select v-model="formInsumo.insumo" required>
-              <option v-for="pr in precios" :key="pr.Id" :value="pr.Insumo">
-                {{ pr.Insumo }} · {{ pesos(pr.PrecioUnitario) }}
-              </option>
-            </select>
-          </label>
-          <label>
-            Cantidad
-            <input v-model.number="formInsumo.cantidad" type="number" min="1" max="100" required />
-          </label>
-        </div>
-        <div class="fila-final">
-          <button class="btn btn-primario" :disabled="enviando">Emitir evento</button>
         </div>
       </form>
 
@@ -493,7 +425,11 @@ const simularMedicacion = async () => {
   margin: 0 auto;
   padding: 40px 16px 64px;
   color: var(--texto);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   line-height: 1.5;
 }
 

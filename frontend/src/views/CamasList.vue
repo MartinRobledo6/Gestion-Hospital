@@ -50,7 +50,7 @@
             <th>ID</th>
             <th>Número de Cama</th>
             <th>Estado</th>
-            <th>Paciente</th>
+            <th v-if="verPaciente">Paciente</th>
             <th>Versión</th>
             <th class="text-center">Acciones</th>
           </tr>
@@ -66,7 +66,9 @@
                 {{ cama.Estado.toUpperCase() }}
               </span>
             </td>
-            <td :class="{ 'sin-paciente': !cama.Paciente }">{{ nombrePaciente(cama) }}</td>
+            <td v-if="verPaciente" :class="{ 'sin-paciente': !cama.Paciente }">
+              {{ nombrePaciente(cama) }}
+            </td>
             <td>v{{ cama.Version }}</td>
             <td class="text-center">
               <button
@@ -153,6 +155,8 @@ const auth = useAuthStore()
 const puedeGestionar = computed(() => tieneRol(auth.rol, 'RECEPCIONISTA'))
 const puedeLimpiar = computed(() => tieneRol(auth.rol, 'MAESTRANZA'))
 const puedeBloquear = computed(() => tieneRol(auth.rol))
+// Maestranza no ve quién ocupa cada cama (el backend tampoco se lo manda)
+const verPaciente = computed(() => auth.rol !== 'MAESTRANZA')
 
 interface PacienteCama {
   Id: number

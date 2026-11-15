@@ -7,6 +7,8 @@ import { NumeroCamaDto } from './dto/numero-cama.dto.js';
 import { TrasladarCamaDto } from './dto/trasladar-cama.dto.js';
 import { Auth } from '../iam/auth.decorador.js';
 import { Rol } from '../iam/rol.enum.js';
+import { UsuarioActual } from '../iam/usuario-actual.decorador.js';
+import type { UsuarioToken } from '../iam/usuario-actual.decorador.js';
 
 // Permisos (el ADMINISTRADOR pasa siempre por el RolesGuard):
 // - Asignar / liberar / trasladar: recepción ("administrativo de piso", HU 1.1)
@@ -59,8 +61,9 @@ export class CamasController {
 
   @Auth(Rol.RECEPCIONISTA, Rol.MEDICO, Rol.ENFERMERO, Rol.MAESTRANZA)
   @Get('listado')
-  listado() {
-    return this.camasService.obtenerCamas();
+  listado(@UsuarioActual() usuario: UsuarioToken) {
+    // Maestranza solo necesita saber qué camas limpiar, no quién las ocupa
+    return this.camasService.obtenerCamas(usuario.rol !== Rol.MAESTRANZA);
   }
 
   // Monitor en tiempo real (Server-Sent Events): GET /camas/eventos

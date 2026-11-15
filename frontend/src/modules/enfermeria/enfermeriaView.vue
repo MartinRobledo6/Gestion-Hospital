@@ -26,7 +26,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
         <h1>Atención y Enfermería</h1>
         <p class="sesion-actual">
           Sesión: <strong>{{ auth.usuario?.nombre }}</strong>
-          <span v-if="!store.enfermero"> · solo lectura (lo registra enfermería)</span>
+          <span v-if="store.puedeIndicar && !store.enfermero">
+            · cargás indicaciones (Medicación); los controles y dosis los registra enfermería
+          </span>
         </p>
       </div>
       <nav class="tabs" aria-label="Secciones de enfermería">

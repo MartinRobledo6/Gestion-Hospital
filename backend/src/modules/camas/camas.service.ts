@@ -49,8 +49,9 @@ export class CamasService {
     return this.transicionar(numero, 'desbloquear', undefined, 'Cama desbloqueada, está libre');
   }
 
-    // Lista las camas y, si están ocupadas, el paciente de la asignación activa (FechaEgreso NULL)
-  async obtenerCamas() {
+  // Lista las camas y, si están ocupadas, el paciente de la asignación activa (FechaEgreso NULL).
+  // incluirPaciente = false para quien no necesita ese dato (maestranza): mínimo privilegio.
+  async obtenerCamas(incluirPaciente = true) {
     const filas = await this.camasRepository
       .createQueryBuilder('c')
       .leftJoin(AsignacionCama, 'a', 'a.CamaId = c.Id AND a.FechaEgreso IS NULL')
@@ -70,9 +71,10 @@ export class CamasService {
       Numero: f.Numero,
       Estado: f.Estado,
       Version: f.Version,
-      Paciente: f.PacienteId
-        ? { Id: f.PacienteId, Nombre: f.PacienteNombre, Apellido: f.PacienteApellido }
-        : null,
+      Paciente:
+        incluirPaciente && f.PacienteId
+          ? { Id: f.PacienteId, Nombre: f.PacienteNombre, Apellido: f.PacienteApellido }
+          : null,
     }));
   }
 

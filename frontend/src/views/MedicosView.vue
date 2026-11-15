@@ -1,258 +1,237 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
-import { apiFetch } from '../api';
-import { useAuthStore } from '../stores/auth';
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { apiFetch } from '../api'
+import { useAuthStore } from '../stores/auth'
 
 // ---------- Tipos ----------
-type TipoProfesional = 'medico' | 'enfermero';
+type TipoProfesional = 'medico' | 'enfermero'
 
 interface Horario {
-  id: number;
-  medicoId: number;
-  diaSemana: number;
-  horaInicio: string;
-  horaFin: string;
-  duracionIntervaloMinutos: number;
+  id: number
+  medicoId: number
+  diaSemana: number
+  horaInicio: string
+  horaFin: string
+  duracionIntervaloMinutos: number
 }
 
 interface Aviso {
-  tipo: 'ok' | 'error';
-  texto: string;
+  tipo: 'ok' | 'error'
+  texto: string
 }
 
 interface Medico {
-  id: number;
-  nombre: string;
-  tipo: TipoProfesional;
-  especialidadId: number | null;
-  especialidad: string;
-  usuarioId: number | null; // cuenta con la que inicia sesión
+  id: number
+  nombre: string
+  tipo: TipoProfesional
+  especialidadId: number | null
+  especialidad: string
+  usuarioId: number | null // cuenta con la que inicia sesión
 }
 
 // Cuenta de la tabla Usuarios (la lista solo la puede pedir el admin)
 interface Cuenta {
-  id: number;
-  nombre: string;
-  email: string;
-  rol: string;
-  activo: boolean;
+  id: number
+  nombre: string
+  email: string
+  rol: string
 }
 
 interface Especialidad {
-  id: number;
-  nombre: string;
-  tipo: TipoProfesional;
+  id: number
+  nombre: string
+  tipo: TipoProfesional
 }
 
-const API_URL = 'http://localhost:3000/admision';
-const USUARIOS_URL = 'http://localhost:3000/usuarios';
+const API_URL = 'http://localhost:3000/admision'
+const USUARIOS_URL = 'http://localhost:3000/usuarios'
 
 // Recepción entra a esta vista solo para los horarios;
 // el alta de profesionales y el vínculo con su cuenta son del admin
-const auth = useAuthStore();
-const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR');
+const auth = useAuthStore()
+const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR')
 
-const DIAS = [
-  'Domingo',
-  'Lunes',
-  'Martes',
-  'Miércoles',
-  'Jueves',
-  'Viernes',
-  'Sábado',
-];
+const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 // Evita el "possibly undefined" al acceder por índice
-const nombreDia = (n: number) => DIAS[n] ?? '';
+const nombreDia = (n: number) => DIAS[n] ?? ''
 
-const etiquetaTipo = (t: TipoProfesional) =>
-  t === 'medico' ? 'Médico' : 'Enfermero';
+const etiquetaTipo = (t: TipoProfesional) => (t === 'medico' ? 'Médico' : 'Enfermero')
 
 // ---------- Estado ----------
-const medicos = ref<Medico[]>([]);
-const especialidades = ref<Especialidad[]>([]);
-const medicoId = ref<number | null>(null);
-const horarios = ref<Horario[]>([]);
-const cargando = ref(false);
-const guardando = ref(false);
-const aviso = ref<Aviso | null>(null);
+const medicos = ref<Medico[]>([])
+const especialidades = ref<Especialidad[]>([])
+const medicoId = ref<number | null>(null)
+const horarios = ref<Horario[]>([])
+const cargando = ref(false)
+const guardando = ref(false)
+const aviso = ref<Aviso | null>(null)
 
 // Formulario de nuevo profesional
-const nuevoNombre = ref('');
-const nuevoTipo = ref<TipoProfesional>('medico');
-const nuevaEspecialidadId = ref<number | null>(null);
-const nuevoUsuarioId = ref<number | null>(null);
-const guardandoMedico = ref(false);
+const nuevoNombre = ref('')
+const nuevoTipo = ref<TipoProfesional>('medico')
+const nuevaEspecialidadId = ref<number | null>(null)
+const nuevoUsuarioId = ref<number | null>(null)
+const guardandoMedico = ref(false)
 
 // Cuentas de usuario y vínculo del profesional seleccionado
-const cuentas = ref<Cuenta[]>([]);
-const cuentaElegida = ref<number | null>(null);
-const vinculando = ref(false);
+const cuentas = ref<Cuenta[]>([])
+const cuentaElegida = ref<number | null>(null)
+const vinculando = ref(false)
 
 // Formulario de nuevo horario
-const diaSemana = ref<number>(1);
-const horaInicio = ref('08:00');
-const horaFin = ref('12:00');
-const intervalo = ref<number>(30);
+const diaSemana = ref<number>(1)
+const horaInicio = ref('08:00')
+const horaFin = ref('12:00')
+const intervalo = ref<number>(30)
 
 // ---------- Formato ----------
 // SQL Server puede devolver '08:00:00.0000000': mostramos solo HH:mm
-const hhmm = (h: string) => h.slice(0, 5);
+const hhmm = (h: string) => h.slice(0, 5)
 
 const aMinutos = (h: string) => {
-  const [hh = 0, mm = 0] = h.split(':').map(Number);
-  return hh * 60 + mm;
-};
+  const [hh = 0, mm = 0] = h.split(':').map(Number)
+  return hh * 60 + mm
+}
 
 const turnosPorDia = (h: Horario) =>
-  Math.floor(
-    (aMinutos(h.horaFin) - aMinutos(h.horaInicio)) / h.duracionIntervaloMinutos,
-  );
+  Math.floor((aMinutos(h.horaFin) - aMinutos(h.horaInicio)) / h.duracionIntervaloMinutos)
 
 // ---------- Datos derivados ----------
-const medicoActual = computed(
-  () => medicos.value.find((m) => m.id === medicoId.value) ?? null,
-);
+const medicoActual = computed(() => medicos.value.find((m) => m.id === medicoId.value) ?? null)
 
 const horariosOrdenados = computed(() =>
   [...horarios.value].sort((a, b) => a.diaSemana - b.diaSemana),
-);
+)
 
 // Días que todavía no tienen horario (solo se permite uno por día)
 const diasLibres = computed(() =>
   DIAS.map((nombre, valor) => ({ nombre, valor })).filter(
     (d) => !horarios.value.some((h) => h.diaSemana === d.valor),
   ),
-);
+)
 
 // Solo las especialidades que corresponden al tipo elegido en el formulario
 const especialidadesFiltradas = computed(() =>
   especialidades.value.filter((e) => e.tipo === nuevoTipo.value),
-);
+)
 
 // Rol de cuenta que corresponde a cada tipo de profesional
-const rolDeTipo = (t: TipoProfesional) => (t === 'medico' ? 'MEDICO' : 'ENFERMERO');
+const rolDeTipo = (t: TipoProfesional) => (t === 'medico' ? 'MEDICO' : 'ENFERMERO')
 
 // Cuentas que se pueden vincular: rol correcto, activas y no usadas por otro profesional
 const cuentasPara = (tipo: TipoProfesional, profesionalId: number | null) =>
   cuentas.value.filter(
     (c) =>
-      c.activo &&
       c.rol === rolDeTipo(tipo) &&
       !medicos.value.some((m) => m.usuarioId === c.id && m.id !== profesionalId),
-  );
+  )
 
-const cuentasAlta = computed(() => cuentasPara(nuevoTipo.value, null));
+const cuentasAlta = computed(() => cuentasPara(nuevoTipo.value, null))
 const cuentasActual = computed(() =>
   medicoActual.value ? cuentasPara(medicoActual.value.tipo, medicoActual.value.id) : [],
-);
+)
 
 const nombreCuenta = (id: number | null) => {
-  const c = cuentas.value.find((x) => x.id === id);
-  return c ? `${c.nombre} (${c.email})` : 'Sin cuenta vinculada';
-};
+  const c = cuentas.value.find((x) => x.id === id)
+  return c ? `${c.nombre} (${c.email})` : 'Sin cuenta vinculada'
+}
 
 const previsualizacion = computed(() => {
-  const total = aMinutos(horaFin.value) - aMinutos(horaInicio.value);
-  if (!intervalo.value || total <= 0) return null;
-  return Math.floor(total / intervalo.value);
-});
+  const total = aMinutos(horaFin.value) - aMinutos(horaInicio.value)
+  if (!intervalo.value || total <= 0) return null
+  return Math.floor(total / intervalo.value)
+})
 
 // ---------- Mensajes ----------
 const leerError = async (res: Response, porDefecto: string) => {
   try {
-    const data = await res.json();
-    return Array.isArray(data.message)
-      ? data.message.join(', ')
-      : data.message || porDefecto;
+    const data = await res.json()
+    return Array.isArray(data.message) ? data.message.join(', ') : data.message || porDefecto
   } catch {
-    return porDefecto;
+    return porDefecto
   }
-};
+}
 
 const mostrarAviso = (tipo: Aviso['tipo'], texto: string) => {
-  aviso.value = { tipo, texto };
-};
+  aviso.value = { tipo, texto }
+}
 
 // ---------- Llamadas al backend ----------
 const obtenerMedicos = async () => {
   try {
     // /profesionales (y no /medicos, que es público) porque trae la cuenta vinculada
-    const res = await apiFetch(`${API_URL}/profesionales`);
+    const res = await apiFetch(`${API_URL}/profesionales`)
     if (!res.ok) {
-      throw new Error(
-        await leerError(res, 'No se pudo obtener la lista de profesionales.'),
-      );
+      throw new Error(await leerError(res, 'No se pudo obtener la lista de profesionales.'))
     }
-    medicos.value = await res.json();
+    medicos.value = await res.json()
 
     // Mantener el profesional elegido; solo pasar al primero si no hay uno válido
     if (!medicos.value.some((m) => m.id === medicoId.value)) {
-      medicoId.value = medicos.value[0]?.id ?? null; // el watch pide sus horarios
+      medicoId.value = medicos.value[0]?.id ?? null // el watch pide sus horarios
     }
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   }
-};
+}
 
 const obtenerEspecialidades = async () => {
   try {
-    const res = await apiFetch(`${API_URL}/especialidades`);
+    const res = await apiFetch(`${API_URL}/especialidades`)
     if (!res.ok) {
-      throw new Error(
-        await leerError(res, 'No se pudieron obtener las especialidades.'),
-      );
+      throw new Error(await leerError(res, 'No se pudieron obtener las especialidades.'))
     }
     // La especialidad seleccionada la resuelve el watch de especialidadesFiltradas
-    especialidades.value = await res.json();
+    especialidades.value = await res.json()
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   }
-};
+}
 
 const obtenerCuentas = async () => {
   try {
-    const res = await apiFetch(USUARIOS_URL);
+    const res = await apiFetch(USUARIOS_URL)
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudieron obtener las cuentas.'));
+      throw new Error(await leerError(res, 'No se pudieron obtener las cuentas.'))
     }
-    cuentas.value = await res.json();
+    cuentas.value = await res.json()
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   }
-};
+}
 
 const vincularCuenta = async () => {
-  if (!medicoActual.value) return;
-  vinculando.value = true;
-  aviso.value = null;
+  if (!medicoActual.value) return
+  vinculando.value = true
+  aviso.value = null
   try {
     const res = await apiFetch(`${API_URL}/medicos/${medicoActual.value.id}/usuario`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usuarioId: cuentaElegida.value }),
-    });
+    })
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudo vincular la cuenta.'));
+      throw new Error(await leerError(res, 'No se pudo vincular la cuenta.'))
     }
-    await obtenerMedicos();
-    await nextTick();
+    await obtenerMedicos()
+    await nextTick()
     mostrarAviso(
       'ok',
       cuentaElegida.value
         ? `Cuenta vinculada a ${medicoActual.value?.nombre}.`
         : `Se quitó la cuenta de ${medicoActual.value?.nombre}.`,
-    );
+    )
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   } finally {
-    vinculando.value = false;
+    vinculando.value = false
   }
-};
+}
 
 const agregarMedico = async () => {
-  guardandoMedico.value = true;
-  aviso.value = null;
+  guardandoMedico.value = true
+  aviso.value = null
   try {
     const res = await apiFetch(`${API_URL}/medicos`, {
       method: 'POST',
@@ -264,57 +243,55 @@ const agregarMedico = async () => {
         // undefined no viaja en el JSON: si no se eligió cuenta, no se manda
         usuarioId: nuevoUsuarioId.value ?? undefined,
       }),
-    });
+    })
 
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudo guardar el profesional.'));
+      throw new Error(await leerError(res, 'No se pudo guardar el profesional.'))
     }
 
-    const creado: Medico = await res.json();
-    nuevoNombre.value = '';
-    nuevoUsuarioId.value = null;
+    const creado: Medico = await res.json()
+    nuevoNombre.value = ''
+    nuevoUsuarioId.value = null
 
-    await obtenerMedicos();
-    medicoId.value = creado.id; // queda seleccionado para cargarle los horarios
+    await obtenerMedicos()
+    medicoId.value = creado.id // queda seleccionado para cargarle los horarios
 
     // El watch de medicoId limpia el aviso: mostrarlo después de que corra
-    await nextTick();
-    mostrarAviso('ok', `${creado.nombre} agregado.`);
+    await nextTick()
+    mostrarAviso('ok', `${creado.nombre} agregado.`)
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   } finally {
-    guardandoMedico.value = false;
+    guardandoMedico.value = false
   }
-};
+}
 
 const obtenerHorarios = async () => {
   if (!medicoId.value) {
-    horarios.value = [];
-    return;
+    horarios.value = []
+    return
   }
 
-  cargando.value = true;
+  cargando.value = true
   try {
-    const res = await apiFetch(`${API_URL}/medicos/${medicoId.value}/horarios`);
+    const res = await apiFetch(`${API_URL}/medicos/${medicoId.value}/horarios`)
     if (!res.ok) {
-      throw new Error(
-        await leerError(res, 'No se pudieron obtener los horarios.'),
-      );
+      throw new Error(await leerError(res, 'No se pudieron obtener los horarios.'))
     }
-    horarios.value = await res.json();
+    horarios.value = await res.json()
   } catch (err: any) {
-    horarios.value = [];
-    mostrarAviso('error', err.message);
+    horarios.value = []
+    mostrarAviso('error', err.message)
   } finally {
-    cargando.value = false;
+    cargando.value = false
   }
-};
+}
 
 const agregarHorario = async () => {
-  if (!medicoId.value) return;
+  if (!medicoId.value) return
 
-  guardando.value = true;
-  aviso.value = null;
+  guardando.value = true
+  aviso.value = null
   try {
     const res = await apiFetch(`${API_URL}/medicos/${medicoId.value}/horarios`, {
       method: 'POST',
@@ -325,89 +302,84 @@ const agregarHorario = async () => {
         horaFin: horaFin.value,
         duracionIntervaloMinutos: intervalo.value,
       }),
-    });
+    })
 
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudo guardar el horario.'));
+      throw new Error(await leerError(res, 'No se pudo guardar el horario.'))
     }
 
-    mostrarAviso(
-      'ok',
-      `Horario del ${nombreDia(diaSemana.value).toLowerCase()} guardado.`,
-    );
-    await obtenerHorarios();
+    mostrarAviso('ok', `Horario del ${nombreDia(diaSemana.value).toLowerCase()} guardado.`)
+    await obtenerHorarios()
 
     // Dejar seleccionado el próximo día libre
-    diaSemana.value = diasLibres.value[0]?.valor ?? diaSemana.value;
+    diaSemana.value = diasLibres.value[0]?.valor ?? diaSemana.value
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   } finally {
-    guardando.value = false;
+    guardando.value = false
   }
-};
+}
 
 const eliminarHorario = async (h: Horario) => {
-  if (
-    !confirm(`¿Quitar el horario del ${nombreDia(h.diaSemana).toLowerCase()}?`)
-  ) {
-    return;
+  if (!confirm(`¿Quitar el horario del ${nombreDia(h.diaSemana).toLowerCase()}?`)) {
+    return
   }
 
-  aviso.value = null;
+  aviso.value = null
   try {
     const res = await apiFetch(`${API_URL}/medicos/horarios/${h.id}`, {
       method: 'DELETE',
-    });
+    })
     if (!res.ok) {
-      throw new Error(await leerError(res, 'No se pudo eliminar el horario.'));
+      throw new Error(await leerError(res, 'No se pudo eliminar el horario.'))
     }
-    mostrarAviso('ok', 'Horario eliminado.');
-    await obtenerHorarios();
+    mostrarAviso('ok', 'Horario eliminado.')
+    await obtenerHorarios()
   } catch (err: any) {
-    mostrarAviso('error', err.message);
+    mostrarAviso('error', err.message)
   }
-};
+}
 
 // ---------- Watchers y ciclo de vida ----------
 watch(medicoId, () => {
-  aviso.value = null;
-  obtenerHorarios();
-});
+  aviso.value = null
+  obtenerHorarios()
+})
 
 // El select de vínculo arranca con la cuenta actual del profesional
 watch(medicoActual, (m) => {
-  cuentaElegida.value = m?.usuarioId ?? null;
-});
+  cuentaElegida.value = m?.usuarioId ?? null
+})
 
 // Si cambia el tipo (médico/enfermero), la cuenta elegida puede dejar de servir
 watch(cuentasAlta, (lista) => {
-  if (!lista.some((c) => c.id === nuevoUsuarioId.value)) nuevoUsuarioId.value = null;
-});
+  if (!lista.some((c) => c.id === nuevoUsuarioId.value)) nuevoUsuarioId.value = null
+})
 
 // Si el día elegido ya tiene horario, pasar al primer día libre
 watch(diasLibres, (lista) => {
-  const primero = lista[0];
+  const primero = lista[0]
   if (primero && !lista.some((d) => d.valor === diaSemana.value)) {
-    diaSemana.value = primero.valor;
+    diaSemana.value = primero.valor
   }
-});
+})
 
 // Si la especialidad elegida ya no está en la lista filtrada, pasar a la primera.
 // Cubre tanto el cambio de tipo como la llegada de las especialidades del backend.
 watch(especialidadesFiltradas, (lista) => {
   if (!lista.some((e) => e.id === nuevaEspecialidadId.value)) {
-    nuevaEspecialidadId.value = lista[0]?.id ?? null;
+    nuevaEspecialidadId.value = lista[0]?.id ?? null
   }
-});
+})
 
 onMounted(() => {
-  obtenerMedicos();
+  obtenerMedicos()
   // Estos endpoints son solo del admin: la recepción no los pide
   if (esAdmin.value) {
-    obtenerEspecialidades();
-    obtenerCuentas();
+    obtenerEspecialidades()
+    obtenerCuentas()
   }
-});
+})
 </script>
 
 <template>
@@ -415,7 +387,11 @@ onMounted(() => {
     <header class="encabezado">
       <h1>Médicos y Horarios</h1>
       <p class="subtitulo">
-        {{ esAdmin ? 'Alta de profesionales y horarios de atención' : 'Horarios de atención de los profesionales' }}
+        {{
+          esAdmin
+            ? 'Alta de profesionales y horarios de atención'
+            : 'Horarios de atención de los profesionales'
+        }}
       </p>
     </header>
 
@@ -453,11 +429,7 @@ onMounted(() => {
           <label>
             Especialidad
             <select v-model.number="nuevaEspecialidadId" required>
-              <option
-                v-for="e in especialidadesFiltradas"
-                :key="e.id"
-                :value="e.id"
-              >
+              <option v-for="e in especialidadesFiltradas" :key="e.id" :value="e.id">
                 {{ e.nombre }}
               </option>
             </select>
@@ -505,8 +477,8 @@ onMounted(() => {
     <section v-if="esAdmin && medicoActual" class="tarjeta">
       <h2>Cuenta de acceso de {{ medicoActual.nombre }}</h2>
       <p class="nota">
-        Actual: <strong>{{ nombreCuenta(medicoActual.usuarioId) }}</strong>.
-        Con esta cuenta el profesional ve su agenda y marca sus turnos como atendidos.
+        Actual: <strong>{{ nombreCuenta(medicoActual.usuarioId) }}</strong
+        >. Con esta cuenta el profesional ve su agenda y marca sus turnos como atendidos.
       </p>
       <form class="form" @submit.prevent="vincularCuenta">
         <div class="fila">
@@ -557,7 +529,9 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-for="h in horariosOrdenados" :key="h.id">
-              <td><span class="id-chip">#{{ h.id }}</span></td>
+              <td>
+                <span class="id-chip">#{{ h.id }}</span>
+              </td>
               <td class="fuerte">{{ nombreDia(h.diaSemana) }}</td>
               <td>{{ hhmm(h.horaInicio) }}</td>
               <td>{{ hhmm(h.horaFin) }}</td>
@@ -566,9 +540,7 @@ onMounted(() => {
                 <span class="badge verde">{{ turnosPorDia(h) }} turnos</span>
               </td>
               <td class="centro">
-                <button class="btn btn-peligro" @click="eliminarHorario(h)">
-                  Eliminar
-                </button>
+                <button class="btn btn-peligro" @click="eliminarHorario(h)">Eliminar</button>
               </td>
             </tr>
           </tbody>
@@ -607,14 +579,7 @@ onMounted(() => {
 
           <label>
             Intervalo (min)
-            <input
-              v-model.number="intervalo"
-              type="number"
-              min="5"
-              max="240"
-              step="5"
-              required
-            />
+            <input v-model.number="intervalo" type="number" min="5" max="240" step="5" required />
           </label>
 
           <button
@@ -629,9 +594,7 @@ onMounted(() => {
         <p v-if="previsualizacion !== null" class="nota">
           Genera {{ previsualizacion }} turnos posibles por día.
         </p>
-        <p v-else class="nota">
-          La hora de fin tiene que ser posterior a la de inicio.
-        </p>
+        <p v-else class="nota">La hora de fin tiene que ser posterior a la de inicio.</p>
       </form>
     </section>
   </main>
@@ -649,7 +612,11 @@ onMounted(() => {
   margin: 0 auto;
   padding: 40px 16px 64px;
   color: var(--texto);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   line-height: 1.5;
 }
 

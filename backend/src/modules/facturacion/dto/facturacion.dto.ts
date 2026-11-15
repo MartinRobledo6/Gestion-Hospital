@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsPositive,
   IsString,
-  Max,
   MaxLength,
   Min,
   MinLength,
@@ -33,20 +32,4 @@ export class AsignarCoberturaDto {
   @IsOptional()
   @IsInt()
   coberturaId!: number | null;
-}
-
-export class SimularMedicacionDto {
-  @IsInt()
-  @Min(1)
-  pacienteId!: number;
-
-  @IsString()
-  @MinLength(2)
-  @MaxLength(120)
-  insumo!: string;
-
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  cantidad!: number;
 }

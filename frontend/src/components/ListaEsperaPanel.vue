@@ -27,6 +27,10 @@ const props = defineProps<{
   coberturas: CoberturaOpcion[]
   // El padre lo incrementa cuando cancela un turno: la lista pudo haber cambiado
   refresco: number
+  // Profesional y fecha elegidos en "Reservar un Turno": la lista los sigue por defecto
+  // (si la agenda de ese día está llena, el paso natural es anotar al paciente acá)
+  medicoSugerido?: number | null
+  fechaSugerida?: string
 }>()
 
 const URL_LISTA = `${API_URL}/admision/lista-espera`
@@ -117,7 +121,22 @@ const quitar = async (entrada: EntradaLista) => {
 watch(
   () => props.medicos,
   (medicos) => {
-    if (!medicoId.value && medicos.length) medicoId.value = medicos[0]!.id
+    if (!medicoId.value && medicos.length) medicoId.value = props.medicoSugerido ?? medicos[0]!.id
+  },
+  { immediate: true },
+)
+
+// Seguir la selección de la reserva (se puede cambiar a mano igual)
+watch(
+  () => props.medicoSugerido,
+  (id) => {
+    if (id) medicoId.value = id
+  },
+)
+watch(
+  () => props.fechaSugerida,
+  (f) => {
+    if (f) fecha.value = f
   },
   { immediate: true },
 )

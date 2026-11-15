@@ -7,13 +7,13 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { randomUUID } from 'node:crypto';
+import { OnEvent } from '@nestjs/event-emitter';
 import { DataSource, Repository } from 'typeorm';
 import { CuentaEstadia } from './entities/cuenta-estadia.entity.js';
 import { CargoAutomatico, Destinatario } from './entities/cargo-automatico.entity.js';
 import { Cobertura, TipoCobertura } from './entities/cobertura.entity.js';
-import { Inventario } from '../inventario/entities/inventario.entity.js';import { PacienteEntity } from '../admision/entities/paciente.entity.js';
+import { Inventario } from '../inventario/entities/inventario.entity.js';
+import { PacienteEntity } from '../admision/entities/paciente.entity.js';
 import { obtenerEstrategia } from './facturacion-strategy.js';
 import { MEDICACION_ADMINISTRADA } from './eventos/medicacion-administrada.evento.js';
 import type { MedicacionAdministradaEvento } from './eventos/medicacion-administrada.evento.js';
@@ -60,12 +60,12 @@ export class FacturacionService implements OnModuleInit {
     private readonly cargosRepo: Repository<CargoAutomatico>,
     @InjectRepository(Cobertura)
     private readonly coberturasRepo: Repository<Cobertura>,
-@InjectRepository(Inventario)
-private readonly preciosRepo: Repository<Inventario>,
+    // La lista de precios vigente es la del inventario (HU 2.1: "precio unitario del insumo")
+    @InjectRepository(Inventario)
+    private readonly preciosRepo: Repository<Inventario>,
     @InjectRepository(PacienteEntity)
     private readonly pacientesRepo: Repository<PacienteEntity>,
     private readonly dataSource: DataSource,
-    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // Datos iniciales para poder probar las HU con una base vacía
@@ -84,18 +84,6 @@ private readonly preciosRepo: Repository<Inventario>,
     const coberturas = await this.coberturasRepo.find({ order: { Nombre: 'ASC' } });
     return coberturas.map((c) => ({ ...c, CopagoFijo: aNumero(c.CopagoFijo) }));
   }
-
-async listarPreciosInsumos() {
-  const precios = await this.preciosRepo.find({
-    order: { Nombre: 'ASC' },
-  });
-
-  return precios.map((p) => ({
-    ...p,
-    Insumo: p.Nombre,
-    PrecioUnitario: aNumero(p.PrecioUnitario),
-  }));
-}
 
   // ---------- Pacientes y cobertura ----------
 
@@ -274,20 +262,6 @@ const precio = await this.preciosRepo.findOneBy({ Nombre: evento.insumo });     
       // Nadie espera la respuesta de un evento: si falla, al menos que quede en el log
       this.logger.error(`No se pudo procesar el evento ${evento.eventoId}`, error);
     }
-  }
-
-  // Reemplaza a Enfermería mientras ese módulo no esté integrado
-  async simularMedicacionAdministrada(pacienteId: number, insumo: string, cantidad: number) {
-    const evento: MedicacionAdministradaEvento = {
-      eventoId: randomUUID(),
-      pacienteId,
-      insumo,
-      cantidad,
-    };
-    // emitAsync espera a los listeners solo para que la vista muestre el cargo al toque.
-    // Enfermería usaría emit(), que no espera.
-    await this.eventEmitter.emitAsync(MEDICACION_ADMINISTRADA, evento);
-    return { eventoId: evento.eventoId };
   }
 
   // ---------- Privados ----------

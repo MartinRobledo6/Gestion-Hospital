@@ -443,7 +443,13 @@ onMounted(() => {
     </section>
 
     <!-- Lista de espera (HU 1.3) -->
-    <ListaEsperaPanel :medicos="medicos" :coberturas="coberturas" :refresco="refrescoListaEspera" />
+    <ListaEsperaPanel
+      :medicos="medicos"
+      :coberturas="coberturas"
+      :refresco="refrescoListaEspera"
+      :medico-sugerido="medicoId"
+      :fecha-sugerida="fecha"
+    />
 
     <!-- Turnos reservados -->
     <section class="tarjeta">
