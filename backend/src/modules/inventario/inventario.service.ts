@@ -1,0 +1,53 @@
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { CreateInventarioDto } from './dto/create-inventario.dto.js';
+import { UpdateInventarioDto } from './dto/update-inventario.dto.js';
+import { Inventario } from './entities/inventario.entity.js';
+import { esViolacionForeignKey } from '../../common/db-errors.js';
+
+@Injectable()
+export class InventarioService {
+  constructor(
+    @InjectRepository(Inventario)
+    private inventarioRepository: Repository<Inventario>,
+  ) {}
+
+  async create(createInventarioDto: CreateInventarioDto) {
+    const nuevoRecurso = this.inventarioRepository.create(createInventarioDto);
+    return await this.inventarioRepository.save(nuevoRecurso);
+  }
+
+  async findAll() {
+    return await this.inventarioRepository.find();
+  }
+
+  async findOne(id: number) {
+    const recurso = await this.inventarioRepository.findOne({ where: { Id: id } });
+    if (!recurso) throw new NotFoundException('Recurso no encontrado');
+    return recurso;
+  }
+
+  async update(id: number, updateInventarioDto: UpdateInventarioDto) {
+    const recursoAntiguo = await this.findOne(id);
+    Object.assign(recursoAntiguo, updateInventarioDto);
+    return await this.inventarioRepository.save(recursoAntiguo);
+  }
+
+  async reponer(id: number, cantidad: number) {
+    const result = await this.inventarioRepository.increment({ Id: id }, 'StockActual', cantidad);
+    if (!result.affected) throw new NotFoundException('Recurso no encontrado');
+    return await this.findOne(id);
+  }
+
+  async remove(id: number) {
+    const recurso = await this.findOne(id);
+    try{
+      return await this.inventarioRepository.remove(recurso);
+    } catch (error) {
+      if (esViolacionForeignKey(error)) {
+        throw new ConflictException('No se puede eliminar el recurso porque está siendo referenciado por otros registros.');
+      }
+    }
+  }
+}
