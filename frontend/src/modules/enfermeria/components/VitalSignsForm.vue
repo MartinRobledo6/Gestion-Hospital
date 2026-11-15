@@ -3,26 +3,32 @@ import { computed, reactive, ref } from 'vue'
 import { useEnfermeriaStore } from '../useEnfermeriaStore'
 import { RANGOS, TEMPERATURA_CRITICA, evaluar, type CampoVital } from '../vitalRanges'
 import { CONSULTORIO } from '../formato'
+import PacienteSelect from '@/components/PacienteSelect.vue'
 
 const store = useEnfermeriaStore()
 
 const ubicacion = ref<'habitacion' | 'consultorio'>('habitacion')
 
-const form = reactive<{
-  patientId: string
+interface FormSignos {
+  patientId: number | null
   roomNumber: string
   systolic: string | number
   diastolic: string | number
   heartRate: string | number
   temperature: string | number
-}>({
-  patientId: '',
+}
+
+// Valores iniciales en un solo lugar: se usan al crear el form y al limpiarlo.
+const FORM_VACIO: FormSignos = {
+  patientId: null,
   roomNumber: '',
   systolic: '',
   diastolic: '',
   heartRate: '',
   temperature: '',
-})
+}
+
+const form = reactive<FormSignos>({ ...FORM_VACIO })
 
 const errores = reactive<Record<string, string>>({})
 const enviando = ref(false)
@@ -45,12 +51,8 @@ const nivel = computed(() => {
 function validar(): boolean {
   for (const k of Object.keys(errores)) delete errores[k]
 
-  const patientId = Number(form.patientId)
-
-  if (!form.patientId.trim()) {
-    errores.patientId = 'Ingresá el ID del paciente.'
-  } else if (!Number.isInteger(patientId) || patientId < 1) {
-    errores.patientId = 'El ID debe ser un número entero positivo.'
+  if (form.patientId === null) {
+    errores.patientId = 'Seleccioná un paciente.'
   }
 
   if (ubicacion.value === 'habitacion' && !form.roomNumber.trim()) {
@@ -80,12 +82,14 @@ function validar(): boolean {
 }
 
 async function enviar() {
-  if (!validar() || !store.enfermero) return
+  const patientId = form.patientId
+  // El "patientId === null" ya lo cubre validar(), pero así TypeScript sabe que abajo es un number.
+  if (!validar() || !store.enfermero || patientId === null) return
 
   enviando.value = true
 
   const ok = await store.registrarSignosVitales({
-    patientId: Number(form.patientId),
+    patientId,
     roomNumber: ubicacion.value === 'consultorio' ? CONSULTORIO : form.roomNumber.trim(),
     bloodPressureSystolic: Number(form.systolic),
     bloodPressureDiastolic: Number(form.diastolic),
@@ -96,9 +100,7 @@ async function enviar() {
   enviando.value = false
 
   if (ok) {
-    for (const k of Object.keys(form) as (keyof typeof form)[]) {
-      form[k] = ''
-    }
+    Object.assign(form, FORM_VACIO)
   }
 }
 </script>
@@ -114,14 +116,8 @@ async function enviar() {
       <h3 id="vs-g-paciente">Paciente</h3>
       <div class="fila">
         <div class="field">
-          <label for="vs-paciente">ID del paciente</label>
-          <input
-            id="vs-paciente"
-            v-model="form.patientId"
-            type="text"
-            autocomplete="off"
-            :aria-invalid="!!errores.patientId"
-          />
+          <label for="vs-paciente">Paciente</label>
+          <PacienteSelect id="vs-paciente" v-model="form.patientId" />
           <span v-if="errores.patientId" class="field-error">{{ errores.patientId }}</span>
         </div>
 

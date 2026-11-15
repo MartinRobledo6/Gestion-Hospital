@@ -8,15 +8,8 @@
     <!-- Búsqueda -->
     <div class="card">
       <form class="search-row" @submit.prevent="buscar">
-        <label for="pacienteId" class="label">ID del paciente</label>
-        <input
-          id="pacienteId"
-          v-model.number="pacienteIdBusqueda"
-          type="number"
-          min="1"
-          class="input"
-          placeholder="Ej: 1"
-        />
+        <label for="pacienteId" class="label">Paciente</label>
+        <PacienteSelect id="pacienteId" v-model="pacienteIdBusqueda" class="input-paciente" />
         <button type="submit" class="btn btn-primary">Buscar</button>
       </form>
 
@@ -180,6 +173,7 @@ import { API_URL } from '../config'
 import { apiFetch } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { tieneRol } from '../permisos'
+import PacienteSelect from '../components/PacienteSelect.vue'
 
 // El médico escribe la historia; enfermería la consulta (alergias, evoluciones, estudios)
 const auth = useAuthStore()
@@ -476,6 +470,11 @@ const agregarEvolucion = async () => {
 .search-row .input,
 .input-corto {
   width: 140px;
+}
+
+.search-row .input-paciente {
+  width: 380px;
+  max-width: 100%;
 }
 
 .input-medio {
