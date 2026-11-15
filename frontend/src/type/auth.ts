@@ -3,6 +3,7 @@ export type Rol =
   | 'MEDICO'
   | 'ENFERMERO'
   | 'RECEPCIONISTA'
+  | 'MAESTRANZA'
   | 'PACIENTE'
 
 export interface Usuario {

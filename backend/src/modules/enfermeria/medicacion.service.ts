@@ -125,12 +125,13 @@ export class MedicacionService {
 
   async createIndication(
     dto: CreateIndicationDto,
+    medicoId: number, // usuario logueado
   ){
     const [patient, doctor, supply] = await Promise.all([
       this.patients.findOneBy({ Id: dto.patientId }),
 
       this.users.findOne({
-        where: { id: dto.medicoId },
+        where: { id: medicoId },
         relations: { rol: true },
       }),
 
@@ -145,13 +146,13 @@ export class MedicacionService {
 
     if (!doctor) {
       throw new BadRequestException(
-        `No existe el médico #${dto.medicoId}.`,
+        `No existe el médico #${medicoId}.`,
       );
     }
 
     if (doctor.rol?.nombre !== 'Médico') {
       throw new BadRequestException(
-        'El usuario seleccionado no tiene el rol de Médico.',
+        'Solo un usuario con rol de Médico puede cargar indicaciones.',
       );
     }
 
@@ -304,6 +305,7 @@ export class MedicacionService {
   
 async registerMedicationAdministration(
   dto: CreateMedicationAdministrationDto,
+  enfermeroId: number, // usuario logueado: la dosis queda a su nombre
 ): Promise<MedicationAdministration> {
   let evento: MedicacionAdministradaEvento | null = null;
 
@@ -379,7 +381,7 @@ async registerMedicationAdministration(
     const administration = await manager.save(
       manager.create(MedicationAdministration, {
         indicationId: indication.id,
-        nurseId: dto.nurseId,
+        nurseId: enfermeroId,
         status: dto.status,
         scheduledAt: slot,
       }),

@@ -5,9 +5,6 @@ export class CrearEvolucionDto {
   @IsNotEmpty()
   HistoriaClinicaId: number;
 
-  @IsInt({ message: 'El ID del médico es obligatorio' })
-  @IsNotEmpty()
-  MedicoId: number;
 
   @IsString({ message: 'Las observaciones deben ser texto' })
   @IsNotEmpty({ message: 'No se puede guardar una evolución en blanco' })

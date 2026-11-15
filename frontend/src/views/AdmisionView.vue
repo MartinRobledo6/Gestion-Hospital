@@ -4,6 +4,8 @@ import { apiFetch } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { accionesPara } from '../permisos'
 import DatosPacienteForm from '../components/DatosPaciente.vue'
+import ListaEsperaPanel from '../components/ListaEsperaPanel.vue'
+import AvisosListaEspera from '../components/AvisoListaEspera.vue'
 import { pacienteVacio, datosParaEnviar, type CoberturaOpcion } from '../components/datosPaciente'
 
 // ---------- Tipos ----------
@@ -71,6 +73,8 @@ const entreHora = ref('')
 const entreDuracion = ref<number | null>(null)
 const entrePaciente = ref(pacienteVacio())
 const insertandoEntre = ref(false)
+// Se incrementa al cancelar un turno: la lista de espera y sus avisos pudieron cambiar
+const refrescoListaEspera = ref(0)
 
 const auth = useAuthStore()
 
@@ -268,7 +272,17 @@ const cambiarEstado = async (turnoId: number, nuevoEstado: string) => {
       throw new Error(await leerError(res, 'Transición no permitida.'))
     }
 
-    mostrarAviso('ok', `Turno #${turnoId} pasó a "${nuevoEstado}".`)
+    // Al cancelar, el backend puede haber asignado el horario a alguien de la lista de espera
+    const data = await res.json()
+    if (data.promovido) {
+      mostrarAviso(
+        'ok',
+        `Turno #${turnoId} cancelado. El horario se asignó al primero de la lista de espera (turno #${data.promovido.turnoId}): avisale al paciente.`,
+      )
+    } else {
+      mostrarAviso('ok', `Turno #${turnoId} pasó a "${nuevoEstado}".`)
+    }
+    if (nuevoEstado === 'Cancelado') refrescoListaEspera.value++
     await Promise.all([obtenerTurnos(), obtenerHorarios()])
   } catch (err: any) {
     mostrarAviso('error', err.message)
@@ -311,6 +325,9 @@ onMounted(() => {
     <p v-if="aviso" :class="['aviso', aviso.tipo]" role="status">
       {{ aviso.texto }}
     </p>
+
+    <!-- HU 1.3: pacientes que recibieron turno desde la lista de espera -->
+    <AvisosListaEspera :refresco="refrescoListaEspera" />
 
     <!-- Reserva -->
     <section class="tarjeta">
@@ -424,6 +441,9 @@ onMounted(() => {
         </div>
       </form>
     </section>
+
+    <!-- Lista de espera (HU 1.3) -->
+    <ListaEsperaPanel :medicos="medicos" :coberturas="coberturas" :refresco="refrescoListaEspera" />
 
     <!-- Turnos reservados -->
     <section class="tarjeta">

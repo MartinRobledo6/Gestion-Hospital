@@ -1,7 +1,9 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ApiError } from '@/api/http'
 import { enfermeriaApi } from './enfermeriaApi'
+import { useAuthStore } from '@/stores/auth'
+import { tieneRol } from '@/permisos'
 import { textoUbicacion } from './formato'
 import type {
   AdmissionReason,
@@ -24,25 +26,6 @@ export interface EnfermeroSesion {
 
 export type Aviso = { tipo: 'exito' | 'alerta' | 'error'; texto: string }
 
-// Todavía no hay login (el módulo IAM no existe). Guardamos "quién está de turno"
-// en localStorage para no pedirlo en cada formulario.
-function leerLocal<T>(clave: string, porDefecto: T): T {
-  try {
-    const raw = localStorage.getItem(clave)
-    return raw ? (JSON.parse(raw) as T) : porDefecto
-  } catch {
-    return porDefecto
-  }
-}
-
-function guardarLocal(clave: string, valor: unknown) {
-  try {
-    localStorage.setItem(clave, JSON.stringify(valor))
-  } catch {
-    // Sin storage (modo privado, etc.): la app sigue funcionando, solo no recuerda.
-  }
-}
-
 export const useEnfermeriaStore = defineStore('enfermeria', () => {
   const signosVitales = ref<VitalSigns[]>([])
   const administraciones = ref<MedicationAdministration[]>([])
@@ -56,8 +39,16 @@ export const useEnfermeriaStore = defineStore('enfermeria', () => {
   const errorCarga = ref('')
   const aviso = ref<Aviso | null>(null)
 
-  const enfermero = ref<EnfermeroSesion | null>(leerLocal<EnfermeroSesion | null>('enfermeria:enfermero', null))
-  watch(enfermero, (v) => guardarLocal('enfermeria:enfermero', v))
+  // Quién está de turno sale del login (antes se escribía a mano en NurseSession).
+  // Solo enfermería (o el admin) registra controles, dosis y protocolos.
+  const auth = useAuthStore()
+  const enfermero = computed<EnfermeroSesion | null>(() =>
+    auth.usuario && tieneRol(auth.rol, 'ENFERMERO')
+      ? { id: auth.usuario.id, nombre: auth.usuario.nombre }
+      : null,
+  )
+  // Solo el médico (o el admin) carga indicaciones
+  const puedeIndicar = computed(() => tieneRol(auth.rol, 'MEDICO'))
 
   const sinLeer = computed(() => notificaciones.value.filter((n) => !n.read).length)
 
@@ -237,6 +228,7 @@ export const useEnfermeriaStore = defineStore('enfermeria', () => {
     errorCarga,
     aviso,
     enfermero,
+    puedeIndicar,
     sinLeer,
     cargarTodo,
     refrescarAvisos,

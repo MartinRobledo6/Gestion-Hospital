@@ -70,7 +70,7 @@
             <td>v{{ cama.Version }}</td>
             <td class="text-center">
               <button
-                v-if="cama.Estado.toLowerCase() === 'libres'"
+                v-if="puedeGestionar && cama.Estado.toLowerCase() === 'libres'"
                 @click="iniciarAsignacion(cama.Numero)"
                 class="btn btn-primary"
               >
@@ -78,7 +78,7 @@
               </button>
 
               <button
-                v-if="cama.Estado.toLowerCase() === 'ocupadas'"
+                v-if="puedeGestionar && cama.Estado.toLowerCase() === 'ocupadas'"
                 @click="liberar(cama.Numero)"
                 class="btn btn-success"
               >
@@ -86,7 +86,7 @@
               </button>
 
               <button
-                v-if="cama.Estado.toLowerCase() === 'ocupadas'"
+                v-if="puedeGestionar && cama.Estado.toLowerCase() === 'ocupadas'"
                 @click="iniciarTraslado(cama.Numero)"
                 class="btn btn-primary"
                 style="margin-left: 5px"
@@ -96,8 +96,9 @@
 
               <button
                 v-if="
-                  cama.Estado.toLowerCase() === 'en limpieza' ||
-                  cama.Estado.toLowerCase() === 'en_limpieza'
+                  puedeLimpiar &&
+                  (cama.Estado.toLowerCase() === 'en limpieza' ||
+                    cama.Estado.toLowerCase() === 'en_limpieza')
                 "
                 @click="limpiar(cama.Numero)"
                 class="btn btn-warning"
@@ -106,7 +107,7 @@
               </button>
 
               <button
-                v-if="cama.Estado.toLowerCase() === 'bloqueadas'"
+                v-if="puedeBloquear && cama.Estado.toLowerCase() === 'bloqueadas'"
                 @click="desbloquear(cama.Numero)"
                 class="btn btn-success"
               >
@@ -115,9 +116,10 @@
 
               <button
                 v-if="
-                  cama.Estado.toLowerCase() === 'libres' ||
-                  cama.Estado.toLowerCase() === 'en limpieza' ||
-                  cama.Estado.toLowerCase() === 'en_limpieza'
+                  puedeBloquear &&
+                  (cama.Estado.toLowerCase() === 'libres' ||
+                    cama.Estado.toLowerCase() === 'en limpieza' ||
+                    cama.Estado.toLowerCase() === 'en_limpieza')
                 "
                 @click="procesarAccion('bloquear', cama.Numero)"
                 class="btn btn-danger"
@@ -140,6 +142,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { API_URL } from '../config'
+import { apiFetch } from '../api'
+import { useAuthStore } from '../stores/auth'
+import { tieneRol } from '../permisos'
+
+// Mismos permisos que camas.controller.ts (el admin puede todo):
+// recepción asigna/da de alta/traslada, maestranza limpia, administración bloquea.
+// Médicos y enfermería ven el mapa sin botones.
+const auth = useAuthStore()
+const puedeGestionar = computed(() => tieneRol(auth.rol, 'RECEPCIONISTA'))
+const puedeLimpiar = computed(() => tieneRol(auth.rol, 'MAESTRANZA'))
+const puedeBloquear = computed(() => tieneRol(auth.rol))
 
 interface PacienteCama {
   Id: number
@@ -185,7 +198,7 @@ const nombrePaciente = (cama: Cama) =>
 
 const fetchCamas = async () => {
   try {
-    const response = await fetch(`${API_URL}/camas/listado`)
+    const response = await apiFetch(`${API_URL}/camas/listado`)
     if (!response.ok) throw new Error('Error al obtener las camas')
     camas.value = await response.json()
   } catch (error) {
@@ -195,7 +208,7 @@ const fetchCamas = async () => {
 
 const procesarAccion = async (endpoint: string, numero: string, extraData = {}) => {
   try {
-    const response = await fetch(`${API_URL}/camas/${endpoint}`, {
+    const response = await apiFetch(`${API_URL}/camas/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ numero, ...extraData }),
@@ -218,7 +231,7 @@ const procesarAccion = async (endpoint: string, numero: string, extraData = {}) 
 
 const fetchPacientes = async () => {
   try {
-    const response = await fetch(`${API_URL}/hce/pacientes`)
+    const response = await apiFetch(`${API_URL}/hce/pacientes`)
     if (!response.ok) throw new Error('Error al obtener los pacientes')
     pacientes.value = await response.json()
   } catch (error) {
@@ -261,7 +274,7 @@ const cancelarTraslado = () => {
 const confirmarTraslado = async () => {
   if (!camaOrigenTraslado.value || !destinoTraslado.value) return
   try {
-    const response = await fetch(`${API_URL}/camas/trasladar`, {
+    const response = await apiFetch(`${API_URL}/camas/trasladar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

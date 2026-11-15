@@ -21,7 +21,7 @@
       </form>
 
       <p v-if="mensaje" class="aviso">{{ mensaje }}</p>
-      <button v-if="sinHistoria" class="btn btn-success" @click="abrirHistoria">
+      <button v-if="sinHistoria && esMedico" class="btn btn-success" @click="abrirHistoria">
         Abrir historia clínica
       </button>
     </div>
@@ -60,7 +60,13 @@
       <div class="card">
         <h3 class="section-title">Alergias y antecedentes</h3>
         <label class="field-label" for="alergias">Alergias</label>
-        <textarea id="alergias" v-model="alergiasEdit" class="input textarea" rows="2"></textarea>
+        <textarea
+          id="alergias"
+          v-model="alergiasEdit"
+          class="input textarea"
+          rows="2"
+          :readonly="!esMedico"
+        ></textarea>
 
         <label class="field-label" for="antecedentes">Antecedentes familiares</label>
         <textarea
@@ -68,24 +74,21 @@
           v-model="antecedentesEdit"
           class="input textarea"
           rows="2"
+          :readonly="!esMedico"
         ></textarea>
 
-        <button class="btn btn-primary" @click="guardarFicha">Guardar cambios</button>
+        <button v-if="esMedico" class="btn btn-primary" @click="guardarFicha">
+          Guardar cambios
+        </button>
       </div>
 
-      <!-- Nueva evolución -->
-      <div class="card">
+      <!-- Nueva evolución: solo el médico. La firma es el usuario logueado. -->
+      <div v-if="esMedico" class="card">
         <h3 class="section-title">Nueva evolución médica</h3>
-        <p class="nota">Las evoluciones no se pueden editar ni borrar una vez guardadas.</p>
-
-        <label class="field-label" for="medicoId">ID del médico</label>
-        <input
-          id="medicoId"
-          v-model.number="medicoId"
-          type="number"
-          min="1"
-          class="input input-corto"
-        />
+        <p class="nota">
+          Se firma a nombre de <strong>{{ auth.usuario?.nombre }}</strong
+          >. Las evoluciones no se pueden editar ni borrar una vez guardadas.
+        </p>
 
         <label class="field-label" for="observaciones">Observaciones</label>
         <textarea
@@ -121,32 +124,34 @@
       <div class="card">
         <h3 class="section-title">Estudios ({{ estudios.length }})</h3>
 
-        <label class="field-label" for="tipoEstudio">Tipo de estudio</label>
-        <select id="tipoEstudio" v-model="tipoEstudio" class="input input-medio">
-          <option v-for="tipo in TIPOS_ESTUDIO" :key="tipo" :value="tipo">{{ tipo }}</option>
-        </select>
+        <template v-if="esMedico">
+          <label class="field-label" for="tipoEstudio">Tipo de estudio</label>
+          <select id="tipoEstudio" v-model="tipoEstudio" class="input input-medio">
+            <option v-for="tipo in TIPOS_ESTUDIO" :key="tipo" :value="tipo">{{ tipo }}</option>
+          </select>
 
-        <label class="field-label" for="descripcionEstudio">Resultado / descripción</label>
-        <textarea
-          id="descripcionEstudio"
-          v-model="descripcionEstudio"
-          class="input textarea"
-          rows="3"
-          placeholder="Mínimo 5 caracteres"
-        ></textarea>
+          <label class="field-label" for="descripcionEstudio">Resultado / descripción</label>
+          <textarea
+            id="descripcionEstudio"
+            v-model="descripcionEstudio"
+            class="input textarea"
+            rows="3"
+            placeholder="Mínimo 5 caracteres"
+          ></textarea>
 
-        <label class="field-label" for="enlaceEstudio">Enlace al archivo (opcional)</label>
-        <input
-          id="enlaceEstudio"
-          v-model="enlaceEstudio"
-          type="url"
-          class="input"
-          placeholder="https://..."
-        />
+          <label class="field-label" for="enlaceEstudio">Enlace al archivo (opcional)</label>
+          <input
+            id="enlaceEstudio"
+            v-model="enlaceEstudio"
+            type="url"
+            class="input"
+            placeholder="https://..."
+          />
 
-        <button class="btn btn-success" :disabled="!estudioValido" @click="agregarEstudio">
-          Guardar estudio
-        </button>
+          <button class="btn btn-success" :disabled="!estudioValido" @click="agregarEstudio">
+            Guardar estudio
+          </button>
+        </template>
 
         <div class="lista-estudios">
           <div v-for="est in estudios" :key="est.Id" class="evolucion">
@@ -172,6 +177,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { API_URL } from '../config'
+import { apiFetch } from '../api'
+import { useAuthStore } from '../stores/auth'
+import { tieneRol } from '../permisos'
+
+// El médico escribe la historia; enfermería la consulta (alergias, evoluciones, estudios)
+const auth = useAuthStore()
+const esMedico = computed(() => tieneRol(auth.rol, 'MEDICO'))
 
 interface Cobertura {
   Nombre: string
@@ -220,7 +232,6 @@ const mensaje = ref('')
 const alergiasEdit = ref('')
 const antecedentesEdit = ref('')
 
-const medicoId = ref<number | null>(null)
 const observaciones = ref('')
 
 const TIPOS_ESTUDIO = [
@@ -238,7 +249,7 @@ const descripcionEstudio = ref('')
 const enlaceEstudio = ref('')
 
 const estudioValido = computed(() => descripcionEstudio.value.trim().length >= 5)
-const evolucionValida = computed(() => !!medicoId.value && observaciones.value.trim().length >= 5)
+const evolucionValida = computed(() => observaciones.value.trim().length >= 5)
 
 // La fecha de nacimiento viene como "1990-01-01": se arma a mano para evitar corrimientos de zona horaria
 const formatearFecha = (fecha: string) => fecha.slice(0, 10).split('-').reverse().join('/')
@@ -260,13 +271,13 @@ const mostrarError = (error: unknown) => {
 }
 
 const cargarEstudios = async (historiaId: number) => {
-  const response = await fetch(`${API}/historia/${historiaId}/estudios`)
+  const response = await apiFetch(`${API}/historia/${historiaId}/estudios`)
   if (!response.ok) throw new Error(await leerError(response))
   estudios.value = await response.json()
 }
 
 const cargarHistoria = async (pacienteId: number) => {
-  const response = await fetch(`${API}/paciente/${pacienteId}`)
+  const response = await apiFetch(`${API}/paciente/${pacienteId}`)
 
   if (response.status === 404) {
     historia.value = null
@@ -304,7 +315,7 @@ const buscar = async () => {
 const abrirHistoria = async () => {
   if (!pacienteIdBusqueda.value) return
   try {
-    const response = await fetch(API, {
+    const response = await apiFetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ PacienteId: pacienteIdBusqueda.value }),
@@ -320,7 +331,7 @@ const guardarFicha = async () => {
   if (!historia.value) return
   const pacienteId = historia.value.PacienteId
   try {
-    const response = await fetch(`${API}/paciente/${pacienteId}`, {
+    const response = await apiFetch(`${API}/paciente/${pacienteId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -340,7 +351,7 @@ const agregarEstudio = async () => {
   const historiaId = historia.value.Id
   const enlace = enlaceEstudio.value.trim()
   try {
-    const response = await fetch(`${API}/estudio`, {
+    const response = await apiFetch(`${API}/estudio`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -363,12 +374,11 @@ const agregarEvolucion = async () => {
   if (!historia.value || !evolucionValida.value) return
   const pacienteId = historia.value.PacienteId
   try {
-    const response = await fetch(`${API}/evolucion`, {
+    const response = await apiFetch(`${API}/evolucion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         HistoriaClinicaId: historia.value.Id,
-        MedicoId: medicoId.value,
         Observaciones: observaciones.value.trim(),
       }),
     })

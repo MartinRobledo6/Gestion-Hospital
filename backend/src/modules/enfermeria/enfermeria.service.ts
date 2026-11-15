@@ -26,7 +26,7 @@ export class EnfermeriaService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async registerVitalSigns(dto: CreateVitalSignsDto): Promise<VitalSigns> {
+  async registerVitalSigns(dto: CreateVitalSignsDto, enfermeroNombre: string): Promise<VitalSigns> {
     const patient = await this.patients.findOneBy({ Id: dto.patientId });
 
     if (!patient) {
@@ -49,7 +49,7 @@ const nursingNote = dto.nursingNote?.trim()
       const record = await manager.save(
         manager.create(VitalSigns, {
           patientId: patient.Id,
-          nurseName: dto.nurseName.trim(),
+          nurseName: enfermeroNombre,
           roomNumber: dto.roomNumber.trim(),
           bloodPressureSystolic: dto.bloodPressureSystolic,
           bloodPressureDiastolic: dto.bloodPressureDiastolic,

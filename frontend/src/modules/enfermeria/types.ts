@@ -20,9 +20,10 @@ export interface VitalSigns {
   recordedAt: string
 }
 
+// nurseName no se manda: el backend lo toma del usuario logueado
 export type CreateVitalSigns = Omit<
   VitalSigns,
-  'id' | 'isCriticalAlert' | 'nursingNote' | 'recordedAt'
+  'id' | 'isCriticalAlert' | 'nursingNote' | 'recordedAt' | 'nurseName'
 >
 
 // ---------- Medicación ----------
@@ -39,9 +40,9 @@ export interface MedicationAdministration {
   status: MedicationStatus
 }
 
+// El enfermero no se manda: el backend lo toma del usuario logueado
 export interface CreateMedicationAdministration {
   indicationId: number
-  nurseId: number
   status: MedicationStatus
   scheduledAt: string
 }
@@ -67,9 +68,9 @@ export interface Indication {
   medicoName?: string
 }
 
+// El médico no se manda: el backend lo toma del usuario logueado
 export interface CreateIndication {
   patientId: number
-  medicoId: number
   supplyId: number
   dose: string
   everyHours: number

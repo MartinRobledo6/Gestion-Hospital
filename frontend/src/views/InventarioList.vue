@@ -6,7 +6,7 @@
     </header>
 
     <!-- Tarjeta del Formulario -->
-    <div class="card form-card">
+    <div v-if="esAdmin" class="card form-card">
       <h3>Nuevo Insumo</h3>
       <form @submit.prevent="crearInsumo" class="grid-form">
         <div class="input-group">
@@ -59,7 +59,7 @@
             <th>Stock Actual</th>
             <th>Stock Mínimo</th>
             <th>Precio Unitario</th>
-            <th class="text-center">Acción</th>
+            <th v-if="esAdmin" class="text-center">Acción</th>
           </tr>
         </thead>
         <tbody>
@@ -81,7 +81,7 @@
             </td>
             <td>{{ insumo.StockMinimo }} u.</td>
             <td>$ {{ insumo.PrecioUnitario }}</td>
-            <td class="text-center">
+            <td v-if="esAdmin" class="text-center">
               <div class="reposicion">
                 <input
                   v-model.number="cantidadesReposicion[insumo.Id]"
@@ -111,8 +111,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API_URL } from '../config'
+import { apiFetch } from '../api'
+import { useAuthStore } from '../stores/auth'
+import { tieneRol } from '../permisos'
+
+// Médicos y enfermería consultan el stock; solo administración lo gestiona
+const auth = useAuthStore()
+const esAdmin = computed(() => tieneRol(auth.rol))
 
 interface Insumo {
   Id: number
@@ -135,7 +142,7 @@ const cantidadesReposicion = ref<Record<number, number | null>>({})
 
 const fetchInsumos = async () => {
   try {
-    const response = await fetch(`${API_URL}/inventario`)
+    const response = await apiFetch(`${API_URL}/inventario`)
     if (!response.ok) throw new Error('Error al obtener el inventario')
     insumos.value = await response.json()
   } catch (error) {
@@ -145,7 +152,7 @@ const fetchInsumos = async () => {
 
 const crearInsumo = async () => {
   try {
-    const response = await fetch(`${API_URL}/inventario`, {
+    const response = await apiFetch(`${API_URL}/inventario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nuevoInsumo.value),
@@ -165,7 +172,7 @@ const reponerInsumo = async (id: number) => {
   const cantidad = cantidadesReposicion.value[id]
   if (!cantidad || cantidad < 1) return
   try {
-    const response = await fetch(`${API_URL}/inventario/${id}/reponer`, {
+    const response = await apiFetch(`${API_URL}/inventario/${id}/reponer`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cantidad }),
@@ -189,7 +196,7 @@ const reponerInsumo = async (id: number) => {
 const eliminarInsumo = async (id: number) => {
   if (!confirm('¿Estás seguro de eliminar este insumo del sistema?')) return
   try {
-    const response = await fetch(`${API_URL}/inventario/${id}`, {
+    const response = await apiFetch(`${API_URL}/inventario/${id}`, {
       method: 'DELETE',
     })
     if (!response.ok) {

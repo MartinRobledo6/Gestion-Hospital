@@ -4,6 +4,7 @@ import { Rol } from './rol.enum.js';
 // Lo que JwtStrategy.validate() deja en req.user
 export interface UsuarioToken {
   id: number;
+  nombre: string;
   email: string;
   rol: Rol;
 }

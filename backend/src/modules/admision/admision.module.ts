@@ -12,7 +12,8 @@ import { EspecialidadEntity } from './entities/especialidad.entity.js';
 import { IngresoGuardiaEntity } from './entities/ingreso-guardia.entity.js';
 import { IamModule } from '../iam/iam.module.js';
 import { Cobertura } from '../facturacion/entities/cobertura.entity.js';
-
+import { ListaEsperaEntity } from './entities/lista-espera.entity.js';
+import { ListaEsperaService } from './lista-espera.service.js';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -23,11 +24,12 @@ import { Cobertura } from '../facturacion/entities/cobertura.entity.js';
       EspecialidadEntity,
       IngresoGuardiaEntity,
       Cobertura, // para asignar cobertura a los pacientes nuevos
+      ListaEsperaEntity,
     ]),
     IamModule, // UsuariosService: vincular profesionales y nombres en la guardia
   ],
   controllers: [AdmisionController, GuardiaController],
-  providers: [AdmisionService, GuardiaService],
+  providers: [AdmisionService, GuardiaService, ListaEsperaService],
   exports: [AdmisionService],
 })
 export class AdmisionModule {}

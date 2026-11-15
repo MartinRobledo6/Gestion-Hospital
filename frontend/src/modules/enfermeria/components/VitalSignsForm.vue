@@ -58,7 +58,7 @@ function validar(): boolean {
   }
 
   if (!store.enfermero) {
-    errores.nurse = 'Iniciá el turno (arriba) para registrar controles.'
+    errores.nurse = 'Solo el personal de enfermería puede registrar controles.'
   }
 
   for (const c of CAMPOS_NUMERICOS) {
@@ -86,7 +86,6 @@ async function enviar() {
 
   const ok = await store.registrarSignosVitales({
     patientId: Number(form.patientId),
-    nurseName: store.enfermero.nombre,
     roomNumber: ubicacion.value === 'consultorio' ? CONSULTORIO : form.roomNumber.trim(),
     bloodPressureSystolic: Number(form.systolic),
     bloodPressureDiastolic: Number(form.diastolic),
@@ -263,7 +262,7 @@ async function enviar() {
           >Se guarda a nombre de <strong>{{ store.enfermero.nombre }}</strong
           >.</template
         >
-        <template v-else>Iniciá el turno para poder guardar.</template>
+        <template v-else>Solo el personal de enfermería puede registrar controles.</template>
       </p>
       <button type="submit" class="btn" :disabled="enviando">
         {{ enviando ? 'Guardando…' : 'Guardar controles' }}

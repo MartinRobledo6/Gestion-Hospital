@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import NurseSession from './components/NurseSession.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useEnfermeriaStore } from './useEnfermeriaStore'
 import './enfermeria.css'
 
 // Esta vista es el "marco" del módulo: cabecera, navegación y avisos.
 // Cada pestaña es una ruta hija que se dibuja en <RouterView />.
 const store = useEnfermeriaStore()
+const auth = useAuthStore()
 
 let timer: number | undefined
 onMounted(() => {
@@ -23,7 +24,10 @@ onBeforeUnmount(() => window.clearInterval(timer))
     <header class="top">
       <div class="top-inner">
         <h1>Atención y Enfermería</h1>
-        <NurseSession />
+        <p class="sesion-actual">
+          Sesión: <strong>{{ auth.usuario?.nombre }}</strong>
+          <span v-if="!store.enfermero"> · solo lectura (lo registra enfermería)</span>
+        </p>
       </div>
       <nav class="tabs" aria-label="Secciones de enfermería">
         <RouterLink to="/enfermeria/signos-vitales">Signos vitales</RouterLink>
@@ -58,6 +62,12 @@ onBeforeUnmount(() => window.clearInterval(timer))
 </template>
 
 <style scoped>
+.sesion-actual {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #64748b);
+}
+
 .top {
   background: var(--surface);
   border-bottom: 1px solid var(--line);

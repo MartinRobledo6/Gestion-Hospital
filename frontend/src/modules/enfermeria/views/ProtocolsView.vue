@@ -48,7 +48,7 @@ function progreso(tareas: { completed: boolean }[]) {
 
 <template>
   <div class="stack">
-    <form class="panel" novalidate @submit.prevent="admitir">
+    <form v-if="store.enfermero" class="panel" novalidate @submit.prevent="admitir">
       <div class="panel-head">
         <h2>Ingreso de paciente (simulado)</h2>
         <p class="hint">Al admitir, el sistema genera solo el plan de cuidados.</p>
@@ -118,6 +118,7 @@ function progreso(tareas: { completed: boolean }[]) {
                 <input
                   type="checkbox"
                   :checked="t.completed"
+                  :disabled="!store.enfermero"
                   @change="store.marcarTarea(t.id, ($event.target as HTMLInputElement).checked)"
                 />
                 {{ t.description }}

@@ -11,12 +11,14 @@ import { VincularUsuarioDto } from './dto/vincular-usuario.dto.js';
 import { Auth } from '../iam/auth.decorador.js';
 import { Rol } from '../iam/rol.enum.js';
 import * as usuarioActualDecorador from '../iam/usuario-actual.decorador.js';
+import { AgregarListaEsperaDto } from './dto/agregar-lista-espera.dto.js';
+import { ListaEsperaService } from './lista-espera.service.js';
 
 // Recordá: el ADMINISTRADOR pasa siempre por el RolesGuard,
 // así que @Auth(Rol.RECEPCIONISTA) significa "recepcionista o admin".
 @Controller('admision')
 export class AdmisionController {
-  constructor(private readonly admisionService: AdmisionService) {}
+  constructor(private readonly admisionService: AdmisionService, private readonly listaEsperaService: ListaEsperaService) {}
 
   // ---------- Públicos (los usa la vista del paciente) ----------
   @Get('medicos')
@@ -87,6 +89,41 @@ export class AdmisionController {
     @usuarioActualDecorador.UsuarioActual() usuario: usuarioActualDecorador.UsuarioToken,
   ) {
     return this.admisionService.cambiarEstado(id, dto, usuario);
+  }
+
+    // ---------- Lista de espera (recepción, HU 1.3) ----------
+  @Auth(Rol.RECEPCIONISTA)
+  @Post('lista-espera')
+  agregarAListaEspera(@Body() dto: AgregarListaEsperaDto) {
+    return this.admisionService.agregarAListaEspera(dto);
+  }
+
+  @Auth(Rol.RECEPCIONISTA)
+  @Get('lista-espera')
+  listarListaEspera(
+    @Query('medicoId', ParseIntPipe) medicoId: number,
+    @Query('fecha') fecha: string, // YYYY-MM-DD
+  ) {
+    return this.listaEsperaService.listar(medicoId, fecha ?? '');
+  }
+
+  // Pacientes que recibieron un turno por una cancelación y todavía no fueron avisados
+  @Auth(Rol.RECEPCIONISTA)
+  @Get('lista-espera/avisos')
+  avisosListaEspera() {
+    return this.listaEsperaService.avisosPendientes();
+  }
+
+  @Auth(Rol.RECEPCIONISTA)
+  @Patch('lista-espera/:id/retirar')
+  retirarDeListaEspera(@Param('id', ParseIntPipe) id: number) {
+    return this.listaEsperaService.retirar(id);
+  }
+
+  @Auth(Rol.RECEPCIONISTA)
+  @Patch('lista-espera/:id/notificado')
+  marcarNotificado(@Param('id', ParseIntPipe) id: number) {
+    return this.listaEsperaService.marcarNotificado(id);
   }
 
   // ---------- Horarios de atención (recepción) ----------

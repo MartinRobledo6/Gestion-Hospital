@@ -15,16 +15,17 @@ import { FacturacionModule } from './modules/facturacion/facturacion.module.js';
   imports: [
     TypeOrmModule.forRoot({
       type: 'mssql',
-      host: 'localhost',
-      port: 1433,
-      username: 'sa',
-      password: '123456',
-      database: 'GestionHospital',
+      // Credenciales desde backend/.env (ver .env.example); cada integrante usa las suyas
+      host: process.env.DB_HOST ?? 'localhost',
+      port: Number(process.env.DB_PORT ?? 1433),
+      username: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME ?? 'GestionHospital',
       autoLoadEntities: true,
       synchronize: false,
       options: {
-        encrypt: false,
-        trustServerCertificate: true,
+        encrypt: process.env.DB_ENCRYPT === 'true',
+        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE !== 'false',
       },
     }),
 

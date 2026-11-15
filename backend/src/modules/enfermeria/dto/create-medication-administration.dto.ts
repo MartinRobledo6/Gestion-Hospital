@@ -5,9 +5,6 @@ export class CreateMedicationAdministrationDto {
   @Min(1)
   indicationId: number; // ID de la IndicacionMedica
 
-  @IsInt()
-  @Min(1)
-  nurseId: number; // ID del enfermero/a que aplica la dosis
 
   @IsIn(['Administrada', 'Omitida'])
   status: 'Administrada' | 'Omitida';

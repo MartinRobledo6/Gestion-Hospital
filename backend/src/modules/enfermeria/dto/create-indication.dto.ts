@@ -6,9 +6,6 @@ export class CreateIndicationDto {
   @Min(1)
   patientId: number;
 
-  @IsInt()
-  @Min(1)
-  medicoId: number;
 
   @IsInt()
   @Min(1)

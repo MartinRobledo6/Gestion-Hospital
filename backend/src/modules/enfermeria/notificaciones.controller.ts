@@ -1,5 +1,10 @@
 import { Controller, Get, Param, ParseIntPipe, Patch, Query } from '@nestjs/common';
 import { NotificacionesService } from './notificaciones.service.js';
+import { Auth } from '../iam/auth.decorador.js';
+import { Rol } from '../iam/rol.enum.js';
+
+// Alertas de signos vitales: las genera enfermería y van dirigidas al médico de guardia
+@Auth(Rol.MEDICO, Rol.ENFERMERO)
 
 @Controller('enfermeria/notifications')
 export class NotificacionesController {

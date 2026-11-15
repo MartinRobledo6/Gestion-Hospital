@@ -6,9 +6,6 @@ export class CreateVitalSignsDto {
   @Min(1)
   patientId: number;
 
-  @IsString()
-  @IsNotEmpty()
-  nurseName: string;
 
   // Para un paciente en el consultorio el frontend envía "Consultorio".
   @IsString()

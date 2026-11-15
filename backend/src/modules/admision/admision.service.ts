@@ -27,6 +27,8 @@ import { UsuarioToken } from '../iam/usuario-actual.decorador.js';
 import { DatosPacienteDto } from './dto/datos-paciente.dto.js';
 import { Cobertura, TipoCobertura } from '../facturacion/entities/cobertura.entity.js';
 import { esViolacionUnique } from '../../common/db-errors.js';
+import { ListaEsperaService } from './lista-espera.service.js';
+import { AgregarListaEsperaDto } from './dto/agregar-lista-espera.dto.js';
 
 @Injectable()
 export class AdmisionService {
@@ -45,6 +47,7 @@ export class AdmisionService {
     private readonly usuariosService: UsuariosService,
     @InjectRepository(Cobertura)
     private readonly coberturasRepo: Repository<Cobertura>,
+    private readonly listaEsperaService: ListaEsperaService,
   ) {}
   
 
@@ -151,10 +154,22 @@ export class AdmisionService {
       : [];
     const nombres = new Map(pacientes.map((p) => [p.id, `${p.nombre} ${p.apellido}`]));
 
+        // HU 1.2: un turno quedó recortado si un entreturno del mismo profesional
+    // arranca justo donde ese turno termina (el entreturno ocupa el tiempo liberado).
+    const clave = (medicoId: number, fecha: Date) =>
+      `${medicoId}|${new Date(fecha).getTime()}`;
+    const iniciosDeEntreturnos = new Set(
+      turnos
+        .filter((t) => t.esEntreturno && t.estado !== 'Cancelado')
+        .map((t) => clave(t.medicoId, t.fechaHoraInicio)),
+    );
+
     return turnos.map((t) => ({
       ...t,
       pacienteNombre:
         t.pacienteId != null ? (nombres.get(t.pacienteId) ?? null) : null,
+      duracionReducida:
+        !t.esEntreturno && iniciosDeEntreturnos.has(clave(t.medicoId, t.fechaHoraFin)),
     }));
   }
 
@@ -279,25 +294,10 @@ export class AdmisionService {
     }
   }
 
-  async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto, usuario: UsuarioToken) {
-    // 1) Permiso por rol: ¿este rol puede llevar un turno a ese estado?
-    if (!puedeCambiarA(usuario.rol, dto.nuevoEstado)) {
-      throw new ForbiddenException(
-        `Tu rol no puede pasar un turno a "${dto.nuevoEstado}".`,
-      );
-    }
-
+    async cambiarEstado(id: number, dto: CambiarEstadoTurnoDto, usuario: UsuarioToken) {
     const turno = await this.turnosRepo.findOneBy({ id });
     if (!turno) {
       throw new NotFoundException(`Turno ${id} no encontrado`);
-    }
-
-    // 2) Permiso por dueño: el médico solo modifica sus propios turnos
-    if (usuario.rol === Rol.MEDICO) {
-      const profesional = await this.profesionalDelUsuario(usuario.id);
-      if (turno.medicoId !== profesional.id) {
-        throw new ForbiddenException('Solo podés modificar tus propios turnos.');
-      }
     }
 
     const estadoActual = ESTADOS[turno.estado];
@@ -307,11 +307,71 @@ export class AdmisionService {
       );
     }
 
-    // 3) Regla de negocio: ¿la transición es válida? (patrón State)
+    // 1) Regla de negocio: ¿la transición es válida? (patrón State)
+    //    Va primero: si el turno está cancelado, el error tiene que ser
+    //    "un turno cancelado no puede avanzar" (HU 2.1 Esc. 2), sea quien sea el que lo intenta.
     const nuevoEstado = estadoActual.transicionar(dto.nuevoEstado);
+
+    // 2) Permiso por rol: ¿este rol puede llevar un turno a ese estado?
+    if (!puedeCambiarA(usuario.rol, nuevoEstado.nombre)) {
+      throw new ForbiddenException(
+        `Tu rol no puede pasar un turno a "${nuevoEstado.nombre}".`,
+      );
+    }
+
+    // 3) Permiso por dueño: el médico solo modifica sus propios turnos
+    if (usuario.rol === Rol.MEDICO) {
+      const profesional = await this.profesionalDelUsuario(usuario.id);
+      if (turno.medicoId !== profesional.id) {
+        throw new ForbiddenException('Solo podés modificar tus propios turnos.');
+      }
+    }
+
+        // Una cancelación libera el horario: se intenta dárselo a la lista de espera (HU 1.3)
+    if (nuevoEstado.nombre === EstadoTurno.CANCELADO) {
+      return this.cancelarYPromover(turno);
+    }
 
     turno.estado = nuevoEstado.nombre;
     return this.turnosRepo.save(turno);
+  }
+
+  // Cancela y reasigna el horario en UNA transacción, con el mismo bloqueo que la reserva:
+  // mientras dura, nadie puede tomar ese horario por otra vía.
+  private async cancelarYPromover(turnoLeido: TurnoEntity) {
+    return this.dataSource.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder(MedicoEntity, 'm')
+        .setLock('pessimistic_write')
+        .where('m.id = :id', { id: turnoLeido.medicoId })
+        .getOne();
+
+      // Se relee bloqueado: otro usuario pudo cambiarlo desde que lo validamos
+      const turno = await manager
+        .createQueryBuilder(TurnoEntity, 't')
+        .setLock('pessimistic_write')
+        .where('t.id = :id', { id: turnoLeido.id })
+        .getOne();
+      if (!turno || turno.estado !== turnoLeido.estado) {
+        throw new ConflictException(
+          'El turno cambió mientras lo cancelabas. Actualizá la lista y probá de nuevo.',
+        );
+      }
+
+      turno.estado = EstadoTurno.CANCELADO;
+      const cancelado = await manager.save(turno);
+      const promovido = await this.listaEsperaService.promoverPorCancelacion(manager, cancelado);
+
+      return { ...cancelado, promovido };
+    });
+  }
+
+  // ---------- Lista de espera (HU 1.3) ----------
+
+  // Igual que la reserva: el paciente se identifica por DNI (se crea si no existe)
+  async agregarAListaEspera(dto: AgregarListaEsperaDto) {
+    const paciente = await this.obtenerOCrearPaciente(dto);
+    return this.listaEsperaService.agregar(paciente.id, dto.medicoId, dto.fecha.slice(0, 10));
   }
 
   // ---------- Agenda del profesional logueado ----------

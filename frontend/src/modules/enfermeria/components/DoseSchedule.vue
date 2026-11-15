@@ -39,14 +39,13 @@ async function confirmar(item: ScheduleItem, d: Dose, status: 'Administrada' | '
   if (!store.enfermero) {
     store.aviso = {
       tipo: 'error',
-      texto: 'Iniciá el turno (nombre e ID del enfermero/a) antes de registrar dosis.',
+      texto: 'Solo el personal de enfermería puede registrar dosis.',
     }
     return
   }
   enviando.value = true
   await store.registrarAdministracion({
     indicationId: item.indication.id,
-    nurseId: store.enfermero.id,
     status,
     scheduledAt: d.scheduledAt,
   })
@@ -97,7 +96,8 @@ const hayIndicaciones = computed(() => store.cronograma.length > 0)
         <li v-for="d in item.doses" :key="d.scheduledAt">
           <span class="hora">{{ formatearHora(d.scheduledAt) }}</span>
           <span class="badge" :class="etiqueta(d).clase">{{ etiqueta(d).texto }}</span>
-          <span class="acciones">
+          <!-- El médico ve el cronograma; las dosis las registra enfermería -->
+          <span v-if="store.enfermero" class="acciones">
             <button
               type="button"
               class="btn"

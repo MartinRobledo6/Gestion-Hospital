@@ -84,15 +84,31 @@ const router = createRouter({
     },
 
     // Módulos existentes de Martín y Nacho
-    { path: '/camas', name: 'CamasList', component: () => import('../views/CamasList.vue') },
-    { path: '/inventario', name: 'InventarioList', component: () => import('../views/InventarioList.vue') },
-    { path: '/hce', name: 'HceView', component: () => import('../views/HceView.vue') },
+    {
+      path: '/camas',
+      name: 'CamasList',
+      component: () => import('../views/CamasList.vue'),
+      meta: { roles: ['RECEPCIONISTA', 'MEDICO', 'ENFERMERO', 'MAESTRANZA'] },
+    },
+    {
+      path: '/inventario',
+      name: 'InventarioList',
+      component: () => import('../views/InventarioList.vue'),
+      meta: { roles: ['MEDICO', 'ENFERMERO'] },
+    },
+    {
+      path: '/hce',
+      name: 'HceView',
+      component: () => import('../views/HceView.vue'),
+      meta: { roles: ['MEDICO', 'ENFERMERO'] },
+    },
 
     // Enfermería
     {
       path: '/enfermeria',
       component: EnfermeriaView,
       redirect: '/enfermeria/signos-vitales',
+      meta: { roles: ['ENFERMERO', 'MEDICO'] }, // las rutas hijas heredan el meta
       children: [
         {
           path: 'signos-vitales',

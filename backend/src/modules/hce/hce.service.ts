@@ -60,7 +60,7 @@ export class HceService {
   }
 
   // 2. Cargar una Evolución Médica (INMUTABLE: No programamos DELETE ni PATCH)
-  async agregarEvolucion(dto: CrearEvolucionDto) {
+  async agregarEvolucion(dto: CrearEvolucionDto, medicoId: number) {
     const historia = await this.historiaClinicaRepository.findOne({ 
       where: { Id: dto.HistoriaClinicaId } 
     });
@@ -70,18 +70,18 @@ export class HceService {
     }
     
     const medico = await this.usuarioRepository.findOne({
-      where: { id: dto.MedicoId },
+      where: { id: medicoId },
       relations: { rol: true },
     });
     if (!medico) {
-      throw new NotFoundException(`El médico ${dto.MedicoId} no existe.`);
+      throw new NotFoundException(`El médico ${medicoId} no existe.`);
     }
     if (medico.rol.nombre !== 'Médico') {
       throw new BadRequestException(
-        `El usuario ${dto.MedicoId} no tiene rol de Médico, no puede registrar evoluciones.`,
+        'Solo un usuario con rol de Médico puede registrar evoluciones.',
       );
     }
-    const nuevaEvolucion = this.evolucionRepository.create(dto);
+    const nuevaEvolucion = this.evolucionRepository.create({ ...dto, MedicoId: medicoId });
     
     return await this.evolucionRepository.save(nuevaEvolucion);
   }

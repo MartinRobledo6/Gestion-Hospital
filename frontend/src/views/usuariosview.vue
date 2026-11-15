@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { apiFetch } from '../api'
 
-type Rol = 'ADMINISTRADOR' | 'MEDICO' | 'ENFERMERO' | 'RECEPCIONISTA' | 'PACIENTE'
+type Rol = 'ADMINISTRADOR' | 'MEDICO' | 'ENFERMERO' | 'RECEPCIONISTA' | 'MAESTRANZA' | 'PACIENTE'
 
 interface Usuario {
   id: number
@@ -18,13 +18,14 @@ interface Aviso {
 
 const API_URL = 'http://localhost:3000/usuarios'
 
-const roles: Rol[] = ['ADMINISTRADOR', 'MEDICO', 'ENFERMERO', 'RECEPCIONISTA']
+const roles: Rol[] = ['ADMINISTRADOR', 'MEDICO', 'ENFERMERO', 'RECEPCIONISTA', 'MAESTRANZA']
 
 const etiquetaRol: Record<Rol, string> = {
   ADMINISTRADOR: 'Administrador',
   MEDICO: 'Médico',
   ENFERMERO: 'Enfermero',
   RECEPCIONISTA: 'Recepcionista',
+  MAESTRANZA: 'Maestranza',
   PACIENTE: 'Paciente',
 }
 

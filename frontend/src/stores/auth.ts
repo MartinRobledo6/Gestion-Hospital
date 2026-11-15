@@ -8,6 +8,7 @@ export const HOME_POR_ROL: Record<Rol, string> = {
   RECEPCIONISTA: '/admision',
   MEDICO: '/mi-agenda',
   ENFERMERO: '/guardia',
+  MAESTRANZA: '/camas',
   PACIENTE: '/solicitar-turno',
 };
 

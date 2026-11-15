@@ -1,4 +1,5 @@
 import { API_URL } from '../config'
+import { useAuthStore } from '../stores/auth'
 
 const BASE_URL = API_URL
 
@@ -31,9 +32,15 @@ async function leerMensajeDeError(response: Response): Promise<string> {
 export async function http<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
+    // Los endpoints de enfermería exigen login: se manda el token como en apiFetch
+    const auth = useAuthStore()
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+        ...init?.headers,
+      },
     })
   } catch {
     // fetch solo lanza excepción si no hubo respuesta (backend apagado, red caída).

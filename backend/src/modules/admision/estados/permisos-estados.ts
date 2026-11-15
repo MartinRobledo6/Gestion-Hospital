@@ -19,6 +19,7 @@ export const ESTADOS_PERMITIDOS_POR_ROL: Record<Rol, EstadoTurno[]> = {
   ],
   [Rol.MEDICO]: [EstadoTurno.ATENDIDO],
   [Rol.ENFERMERO]: [],
+  [Rol.MAESTRANZA]: [],
 };
 
 export function puedeCambiarA(rol: Rol, destino: string): boolean {
