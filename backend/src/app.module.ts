@@ -15,7 +15,7 @@ import { FacturacionModule } from './modules/facturacion/facturacion.module.js';
   imports: [
     TypeOrmModule.forRoot({
       type: 'mssql',
-      // Credenciales desde backend/.env (ver .env.example); cada integrante usa las suyas
+      // Credenciales desde backend/.env cada integrante usa las suyas
       host: process.env.DB_HOST ?? 'localhost',
       port: Number(process.env.DB_PORT ?? 1433),
       username: process.env.DB_USER,
