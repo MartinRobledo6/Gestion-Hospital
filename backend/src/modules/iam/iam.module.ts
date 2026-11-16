@@ -10,13 +10,14 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { JwtStrategy } from './jwt.strategy.js';
 import { RolesGuard } from './roles.guard.js';
+import { obtenerJwtSecret } from './jwt-secret.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UsuarioEntity, Rol]),
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret-cambiar',
+      secret: obtenerJwtSecret(),
       signOptions: { expiresIn: '8h' },
     }),
   ],

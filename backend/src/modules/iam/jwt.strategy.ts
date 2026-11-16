@@ -5,13 +5,14 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { UsuariosService } from './usuarios.service.js';
 import { UsuarioToken } from './usuario-actual.decorador.js';
+import { obtenerJwtSecret } from './jwt-secret.js';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly usuarios: UsuariosService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: process.env.JWT_SECRET ?? 'dev-secret-cambiar',
+      secretOrKey: obtenerJwtSecret(),
     });
   }
 
