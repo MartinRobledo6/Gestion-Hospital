@@ -9,7 +9,8 @@ Programación.
 | --------------------------------------------------------------------- | ---------------------------------- |
 | Gestión de Recursos y Camas, Inventario, Historia Clínica Electrónica | Martín Robledo                     |
 | Atención y Enfermería                                                 | Ignacio Beltramino                 |
-| Admisión y Turnos, Guardia, Identidad y Accesos (IAM), Facturación    | Joaquín Mullasano y Joaquín Acosta |
+| Admisión y Turnos, Guardia, Identidad y Accesos (IAM)                 | Joaquín Mullasano                  |
+| Facturación                                                           | Joaquín Acosta                     |
 
 ## Tecnologías
 
